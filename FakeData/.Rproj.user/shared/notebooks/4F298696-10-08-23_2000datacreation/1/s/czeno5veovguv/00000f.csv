@@ -1,0 +1,20 @@
+"0","# create data frame"
+"0",""
+"0","#put all vectors into a list"
+"0",""
+"0","tmp = mget(ls())"
+"0",""
+"0",""
+"0","#turn list into a data frame"
+"0","data = as.data.frame(do.call(cbind, tmp))"
+"0",""
+"0","data= data %>%"
+"0","  relocate(id) %>%"
+"0","  mutate(age=as.numeric(age)) %>%"
+"0","  select(-s)"
+"2","relocate: columns reordered (id, age, ageg, bf, bw, …)
+"
+"2","mutate: converted 'age' from character to double (0 new NA)
+"
+"2","select: dropped one variable (s)
+"

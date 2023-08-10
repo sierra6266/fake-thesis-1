@@ -1,0 +1,337 @@
+---
+title: "data creation"
+author: "Sierra"
+date: "2023-07-27"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# load libraries
+```{r}
+library(summarytools)
+library(haven)
+library(here)
+library(coxed)
+library(tableone)
+library(tidyverse)
+library(ggplot2)
+library(tidylog)
+```
+
+#load transplant data
+```{r}
+
+heart = read_sas(here("Data", "stanreduced (1).sas7bdat"))
+
+df = dfSummary(heart)
+stview(df)
+
+heart = heart %>%
+  mutate(survt= case_when(dls<= 3650 ~ dls,
+                   TRUE ~ NA_real_))
+
+heart$dls
+```
+
+
+#Create fake data
+```{r}
+#create size var
+s =2000
+
+#create id variable
+id = 1:2000
+
+#smoking in preg
+smk = c(sample(x = c("1", "2", "3", "4"), 
+       prob = c(.85, .05, .05, .05),
+       size = s, 
+       replace = TRUE))
+
+#antenatal care provider
+care = sample(x = c("1", "2", "3", "4", "5"), 
+       prob = c(.05, .17, .01, .75, .02),
+       size = s, 
+       replace = TRUE)
+
+#maternal AI
+matai = sample(x=c("0", "1"),
+      prob = c(.976, .024),
+      size=s,
+replace=TRUE)
+
+# maternal comorbidities
+comorb = sample(x=c("0", "1"),
+      prob = c(.8, .2),
+      size=s,
+replace=TRUE)
+
+# antenatal steroids
+
+ster = sample(x=c("0", "1"),
+      prob = c(.95, .05),
+      size=s,
+replace=TRUE)
+
+#mode of delivery
+
+del = sample(x=c("0", "1", "2"),
+      prob = c(.05, .57, .38),
+      size=s,
+replace=TRUE)
+
+# Obstetric complications
+comp = sample(x=c("0", "1"),
+      prob = c(.7, .3),
+      size=s,
+replace=TRUE)
+
+# LMP season
+
+seas = sample(x=c("1", "2", "3", "4"),
+      prob = c(.253, .267, .244, .236),
+      size=s,
+replace=TRUE)
+
+#infant sex
+sex= sample(x=c("0", "1"),
+      prob = c(.49, .51),
+      size=s,
+replace=TRUE)
+
+#excusive bf
+
+bf = sample(x=c("1", "2", "3", "4"),
+      prob = c(.05, .55, .05, .35),
+      size=s,
+replace=TRUE)
+
+#multiple birth
+
+multip = sample(x=c("0", "1"),
+      prob = c(.967, .033),
+      size=s,
+replace=TRUE)
+
+#neighbourhood income quintile
+
+quint = sample(x=c("1", "2", "3", "4", "5"),
+      prob = c(.1, .2, .4, .2, .1),
+      size=s,
+replace=TRUE)
+
+#rural residence
+
+rur = sample(x=c("0", "1"),
+      prob = c(.83, .17),
+      size=s,
+replace=TRUE)
+
+
+#PHU
+
+phu = sample(x=c("1", "2", "3", "4", "5", "6"),
+      prob = c(.1, .2, .4, .2, .05, .05),
+      size=s,
+replace=TRUE)
+
+#outcome: child AI
+
+out_ai = sample(x=c("0", "1"),
+      prob = c(.995, .005),
+      size=s,
+replace=TRUE)
+
+#maternal age
+#group
+ageg = sample(x=c("1", "2", "3", "4"),
+      prob = c(.034, .4, .52, .046),
+      size=s,
+replace=TRUE)
+
+#try
+age= round(rnorm(n = 2000, mean = 32, sd = 5.5),0)
+
+#parity
+  
+par= sample(x=c("0", "1", "2", "3", "4", "5"),
+      prob = c(.5, .25, .20, .03, .01, .01),
+      size=s,
+replace=TRUE)
+
+#gest age
+  
+gest= sample(x=c("1", "2", "3", "4"),
+      prob = c(.079, .915, .03, .03),
+      size=s,
+replace=TRUE)
+  
+# birth weight
+  
+bw = sample(x=c("1", "2", "3", "4", "5"),
+      prob = c(.009, .056, .917, .012, .006),
+      size=s,
+replace=TRUE)
+
+# exp 1: infection in preg
+exp_flu = sample(x=c("0", "1"),
+      prob = c(.98, .02),
+      size=s,
+replace=TRUE)
+
+# exp 2: vax in preg
+exp_vax = sample(x=c("0", "1"),
+      prob = c(.58, .42),
+      size=s,
+replace=TRUE)
+
+```
+
+
+```{r}
+# create data frame
+
+#put all vectors into a list
+
+tmp = mget(ls())
+
+
+#turn list into a data frame
+data = as.data.frame(do.call(cbind, tmp))
+
+data= data %>%
+  relocate(id) %>%
+  mutate(age=as.numeric(age)) %>%
+  select(-s)
+```
+
+
+```{r}
+#output data
+write.csv(data, "D:\\DocumentsHDD\\uOttawa\\Thesis\\R coding\\FakeData\\Data\\fakedata_10AUG23.csv", row.names=FALSE)
+```
+
+#Age vector
+```{r}
+
+
+#check dist
+stview(dfSummary(age))
+
+```
+
+## Coxed package to make survival times
+```{r}
+#change all cols to numeric
+tmpdata = data %>%
+  mutate_if(is.character, as.numeric)
+
+#create simulated data with 2000 obs and 0.5% failure
+simdata = sim.survdata(N=2000, T=3650, X=tmpdata, censor=.994, num.data.frames=1)
+
+simdata2 = sim.survdata(N=2000, T=3650, X=tmpdata, censor=.994, num.data.frames=1)
+
+
+fakedata = simdata2$data
+
+# make the out_ai match the failed var
+# make the failure times not 3650
+# sample sets the seed, runif determines the min and max of the distribution
+# make most survival times 3650 instead of 1
+
+fakedata = fakedata %>%
+  mutate(out_ai = case_when(failed == FALSE ~ 0,
+                            TRUE ~ 1),
+         y = floor(ifelse(failed == TRUE,
+                    runif(sample(1:1500, 1, replace=FALSE), 365, 3649), y)),
+         x = y, 
+         y = 3651-x) %>%
+  select(-x)
+  
+
+
+stview(dfSummary(fakedata))
+
+# check failure times
+fakedata %>%
+  filter(failed==TRUE) %>%
+  select(id, y, out_ai, failed) %>%
+  view()
+
+#output data
+write.csv(fakedata, "D:\\DocumentsHDD\\uOttawa\\Thesis\\R coding\\FakeData\\Data\\fakedata-nomissing_10AUG23.csv", row.names=FALSE)
+
+
+
+idlist = fd %>%
+  filter(failed == TRUE) %>%
+  select(id)
+
+idlist = idlist[['id']]
+
+# show the simdata2 that have an id in the idlist
+simdata2$data %>%
+  filter(id %in% idlist) %>%
+  view()
+```
+
+
+#Add missing
+```{r}
+df = fakedata
+
+# Get col names from df
+x <- colnames(df)
+
+# print them as a vector
+dput(x)
+
+#remove the ones I don't want to have NAs in
+c( "bf", "care", "comp", "exp_vax", "multip", 
+"par", "smk", "ster")
+
+# add NAs
+# sample 1:13 generates a random %NA from 1 to 10
+# I had built in some NAs when I made the data. bw 5 is NA, gest age 4 is NA, del 0 is NA
+
+df =df %>%
+  mutate(.data = as_tibble(df),
+       across(
+         .cols = all_of(c("bf", "care", "comp", "multip", "par", "smk", "ster")),
+         .fns = ~ ifelse(row_number(.x) %in% 
+                           sample(1:n(), size = ((sample(0:10, 1, replace=TRUE)) * n(
+         ) / 100)), NA, .x))) %>%
+  mutate(.data = as_tibble(df),
+       across(
+         .cols = all_of(c("exp_vax")),
+         .fns = ~ ifelse(row_number(.x) %in% 
+                           sample(1:n(), size = (13 * n(
+         ) / 100)), NA, .x))) %>%
+  mutate(bw = ifelse(bw==5, NA, bw),
+         gest = ifelse(gest==4, NA, gest),
+         del = ifelse(del==0, NA, del))
+
+
+stview(dfSummary(df))
+
+
+
+```
+
+#output data with missings
+```{r}
+#output data
+
+write.csv(df,file=here::here("Data","fakedata-missing_10AUG23.csv"), row.names=FALSE)
+```
+
+
+
+#explore data
+```{r}
+stview(dfSummary(df))
+```
+
+

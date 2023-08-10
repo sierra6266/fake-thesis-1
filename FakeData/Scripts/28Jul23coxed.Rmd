@@ -1,0 +1,85 @@
+---
+title: "Coxed data"
+author: "Sierra"
+date: "2023-07-28"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# load libraries
+```{r}
+library(summarytools)
+library(haven)
+library(here)
+library(coxed)
+library(mice)
+library(WeightIt)
+library(tableone)
+library(tidyverse)
+library(ggplot2)
+library(tidylog)
+```
+
+## Coxed package to make survival times
+```{r}
+#change all cols to numeric
+tmpdata = data %>%
+  mutate_if(is.character, as.numeric)
+
+#create simulated data with 1000 obs and 0.5% failure
+simdata = sim.survdata(T=3650, X=tmpdata, censor=.995, num.data.frames=1)
+
+
+head(simdata$data)
+
+stview(dfSummary(simdata$data))
+
+fakedata = simdata$data
+
+fakedata = fakedata %>%
+  mutate(out_ai = case_when(failed == FALSE ~ 0,
+                            TRUE ~ 1))
+
+#output data
+write.csv(fakedata, "D:\\DocumentsHDD\\uOttawa\\Thesis\\R coding\\FakeData\\Data\\simdata28JUL23.csv", row.names=FALSE)
+
+```
+
+
+#Add missing
+```{r}
+df = fakedata
+
+# Get col names from df
+x <- colnames(df)
+
+# print them as a vector
+dput(x)
+
+#remove the ones I don't want to have NAs in
+c( "bf", "bw", "care", "comp", 
+"del", "exp_flu", "exp_vax", "multip", 
+"par", "phu", "quint", "rur", "smk", "ster")
+
+# add NAs
+# sample 1:13 generates a random %NA from 1 to 10
+
+mutate(.data = as_tibble(df),
+       across(
+         .cols = all_of(c("bf", "bw", "care", "comp", 
+"del", "exp_flu", "exp_vax", "multip", 
+"par", "phu", "quint", "rur", "smk", "ster")),
+         .fns = ~ ifelse(row_number(.x) %in% 
+                           sample(1:n(), size = ((sample(0:10, 1, replace=TRUE)) * n(
+         ) / 100)), NA, .x)))
+```
+
+#output data with missings
+```{r}
+#output data
+
+write.csv(df,file=here::here("Data","fakedata-missing_10AUG23.csv"), row.names=FALSE)
+```

@@ -1,0 +1,5 @@
+"0","fakedata %>%
+  filter(failed == FALSE & out_ai == 0) %>% view()
+"
+"2","filter: removed 6 rows (1%), 994 rows remaining
+"

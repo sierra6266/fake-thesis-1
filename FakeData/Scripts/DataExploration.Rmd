@@ -1,0 +1,67 @@
+---
+title: "Data exploration"
+author: "Sierra"
+date: "2023-07-28"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# load libraries
+```{r}
+library(summarytools)
+library(haven)
+library(here)
+library(coxed)
+library(mice)
+library(WeightIt)
+library(tableone)
+library(tidyverse)
+library(ggplot2)
+library(tidylog)
+```
+
+#load data
+```{r}
+data = read_csv(here("Data", "simdata28JUL23.csv"))
+
+
+```
+#Add missing
+```{r}
+df = data
+
+# Get col names from df
+x <- colnames(df)
+
+# print them as a vector
+dput(x)
+
+#remove the ones I don't want to have NAs in
+c( "bf", "bw", "care", "comp", 
+"del", "exp_flu", "exp_vax", "multip", 
+"par", "phu", "quint", "rur", "smk", "ster")
+
+# add NAs
+# sample 1:13 generates a random %NA from 1 to 10
+
+mutate(.data = as_tibble(df),
+       across(
+         .cols = all_of(c("bf", "bw", "care", "comp", 
+"del", "exp_flu", "exp_vax", "multip", 
+"par", "phu", "quint", "rur", "smk", "ster")),
+         .fns = ~ ifelse(row_number(.x) %in% 
+                           sample(1:n(), size = ((sample(0:10, 1, replace=TRUE)) * n(
+         ) / 100)), NA, .x)
+       ))
+```
+
+#output data
+```{r}
+#output data
+
+write.csv(df,file=here::here("Data","fakedata-missing_10AUG23.csv"), row.names=FALSE)
+```
+

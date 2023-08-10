@@ -1,0 +1,12 @@
+"0","# flip the y times so that most are near 3650
+fakedata = fakedata %>%
+  mutate(x=y) %>%
+  mutate(y = 3651-x) %>%
+  select(-x)
+"
+"2","mutate: new variable 'x' (integer) with 400 unique values and 0% NA
+"
+"2","mutate: converted 'y' from integer to double (0 new NA)
+"
+"2","select: dropped one variable (x)
+"

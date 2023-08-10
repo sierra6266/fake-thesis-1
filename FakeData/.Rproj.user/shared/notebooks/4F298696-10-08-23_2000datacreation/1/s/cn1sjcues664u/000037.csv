@@ -1,0 +1,10 @@
+"0","# check failure times
+fakedata %>%
+  filter(failed==TRUE) %>%
+  select(id, y, out_ai, failed) %>%
+  view()
+"
+"2","filter: removed 1,988 rows (99%), 12 rows remaining
+"
+"2","select: dropped 21 variables (age, ageg, bf, bw, care, …)
+"

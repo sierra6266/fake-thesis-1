@@ -1,0 +1,35 @@
+"0","mutate(.data = as_tibble(df),
+       across(
+         .cols = all_of(c(""bf"", ""bw"", ""care"", ""comp"", 
+""del"", ""exp_flu"", ""exp_vax"", ""multip"", 
+""par"", ""phu"", ""quint"", ""rur"", ""smk"", ""ster"")),
+         .fns = ~ ifelse(row_number(.x) %in% 
+                           sample(1:n(), size = ((sample(0:10, 1, replace=TRUE)) * n(
+         ) / 100)), NA, .x)))
+"
+"2","mutate: changed 60 values (6%) of 'bf' (60 new NA)
+"
+"2","        changed 70 values (7%) of 'bw' (70 new NA)
+"
+"2","        changed 20 values (2%) of 'care' (20 new NA)
+"
+"2","        changed 40 values (4%) of 'comp' (40 new NA)
+"
+"2","        changed 30 values (3%) of 'del' (30 new NA)
+"
+"2","        changed 80 values (8%) of 'exp_flu' (80 new NA)
+"
+"2","        changed 100 values (10%) of 'exp_vax' (100 new NA)
+"
+"2","        changed 50 values (5%) of 'multip' (50 new NA)
+"
+"2","        changed 60 values (6%) of 'par' (60 new NA)
+"
+"2","        changed 80 values (8%) of 'phu' (80 new NA)
+"
+"2","        changed 10 values (1%) of 'quint' (10 new NA)
+"
+"2","        changed 40 values (4%) of 'rur' (40 new NA)
+"
+"2","        changed 70 values (7%) of 'ster' (70 new NA)
+"
