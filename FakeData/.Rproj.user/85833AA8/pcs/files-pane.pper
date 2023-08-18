@@ -1,9 +1,9 @@
 {
-    "path": "D:/DocumentsHDD/uOttawa/Thesis/R coding/FakeData/Data",
+    "path": "D:/DocumentsHDD/uOttawa/Thesis/R coding/fake-thesis/FakeData/Scripts",
     "sortOrder": [
         {
             "columnIndex": 2,
-            "ascending": true
+            "ascending": false
         }
     ]
 }

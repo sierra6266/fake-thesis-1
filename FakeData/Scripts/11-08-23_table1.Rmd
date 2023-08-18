@@ -1,0 +1,85 @@
+---
+title: "table 1 and exploration"
+author: "Sierra"
+date: "2023-08-11"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load libraries
+```{r}
+library(janitor)
+library(tidyr)
+library(summarytools)
+library(haven)
+library(here)
+library(coxed)
+library(tableone)
+library(tidyverse)
+library(ggplot2)
+library(tidylog)
+```
+
+# Load data
+```{r}
+data_missing <- read_csv(here("Data", "fakedata-missing_10AUG23.csv"))
+
+data = read_csv(here ("Data", "fakedata-nomissing_10AUG23.csv"))
+```
+
+# Explore data
+```{r}
+#peek at data
+head(data)
+
+#look at classes
+lapply(data, class)
+
+# summary of data. Look for categories with small numbers of people
+stview(dfSummary(data))
+
+# I had built in some NAs when I made the data. bw 5 is NA, gest age 4 is NA, del 0 is NA
+data = data %>%
+  mutate(bw = ifelse(bw==5, 4, bw),
+         gest = ifelse(gest==4, 3, gest),
+         del = ifelse(del==0, 2, del))
+
+stview(dfSummary(data))
+
+# Small cells: bw 1, care 3, out_ai 1, par 4 and 5, failed TRUE.
+```
+
+# Plot things
+```{r}
+
+```
+
+# Create table 1
+Check dist of potential confounders stratified by exposure
+```{r}
+
+# Get col names from df
+x <- colnames(data)
+
+# print them as a vector
+dput(x)
+
+# save ones I need to vector (removed id, ageg, exp_flu, exp_vax, out_ai, failed,  )
+vars = c("age", "bf", "bw", "care", "comorb", "comp", 
+"del", "gest", "matai", "multip", "par", "phu", "quint", "rur", "seas", "sex", "smk", "ster", "y")
+
+# create crude table
+  
+t1_crude = CreateTableOne(strata= "exp_vax", vars = vars, data=data, test=F)
+print(t1_crude, smd=T)
+# they're all already balanced because of my random data
+
+# check missing data set
+t1_crude_miss = CreateTableOne(strata= "exp_vax", vars = vars, data=data_missing, test=F)
+print(t1_crude_miss, smd=T)
+
+```
+

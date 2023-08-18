@@ -1,0 +1,137 @@
+---
+title: "12AUG23 table1 with brfss data"
+author: "Sierra"
+date: "2023-08-12"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load libs
+```{r}
+library(janitor)
+library(tidyr)
+library(summarytools)
+library(haven)
+library(here)
+library(coxed)
+library(tableone)
+library(tidyverse)
+library(ggplot2)
+library(tidylog)
+library(flextable)
+library(gtsummary)
+```
+
+## Load data
+```{r}
+data_missing <- read_csv(here("Data", "brf-fakedata-missing_12AUG23.csv")) %>%
+  mutate(phu = case_when(phu %in% 1:10 ~ 1,
+                        phu %in% 11:20 ~ 2,
+                        phu %in% 21:30 ~ 3,
+                        phu %in% 31:40 ~ 4,
+                        phu %in% 41:50 ~ 5,
+                        phu %in% 51:70 ~ 6,
+                        TRUE ~ NA_real_))
+
+data = read_csv(here ("Data", "brf-fakedata-no-missing_12AUG23.csv")) %>%
+  mutate(phu = case_when(phu %in% 1:10 ~ 1,
+                        phu %in% 11:20 ~ 2,
+                        phu %in% 21:30 ~ 3,
+                        phu %in% 31:40 ~ 4,
+                        phu %in% 41:50 ~ 5,
+                        phu %in% 51:70 ~ 6,
+                        TRUE ~ NA_real_))
+```
+## output missing data. 465473 rows x 23 vars
+```{r}
+#output data
+write.csv(data_missing, file=here::here("Data","brf-fakedata-missing_17AUG23.csv"), row.names=FALSE)
+```
+## output non missing data. 229753 x 23 vars
+
+```{r}
+#output data
+write.csv(data, file=here::here("Data","brf-fakedata-no-missing_17AUG23.csv"), row.names=FALSE)
+```
+
+## Explore data
+
+The code below is from my prev exploration of the other fake data. Redo to match current data. 
+```{r}
+#peek at data
+head(data)
+
+#look at classes
+lapply(data, class)
+
+# summary of data. Look for categories with small numbers of people
+stview(dfSummary(data))
+
+```
+
+## Plot things
+```{r}
+
+```
+
+## Create table 1
+Check dist of potential confounders stratified by exposure
+
+```{r}
+
+# Get col names from df
+x <- colnames(data)
+
+# print them as a vector
+dput(x)
+
+# make vectors of continuous and categorical vars
+
+cat = c("id", "sex", "phu", "ster", "out_ai", "comorb", "matai", "care", 
+"par", "smk", "del", "multip", "rur", "quint", "exp_vax", "comp", 
+"exp_flu", "bf", "seas", "gest")
+
+con = c("age", "futime","bw")
+
+# save ones I need to this vector (removed id, ageg, exp_flu, exp_vax, out_ai, failed,  )
+vars = c("sex", "phu", "ster", "comorb", "matai", "care", 
+"par", "smk", "del", "multip", "rur", "quint", "comp", 
+"bf", "age", "futime", "seas", "bw", "gest")
+
+# create crude table
+  
+t1_crude = CreateTableOne(strata= "exp_vax", vars = vars, data=data, test=F)
+print(t1_crude, smd=T)
+# ster, comorb, care, par, smk, rur, quint, br all above 0.10
+
+# check missing data set
+t1_crude_miss = CreateTableOne(strata= "exp_vax", vars = vars, data=data_missing, test=F)
+print(t1_crude_miss, smd=T)
+  
+
+
+```
+# try gtsummary
+
+"Each variable in the data frame has been assigned an attribute label (i.e. attr(trial$trt, "label") == "Chemotherapy Treatment") with the labelled package. These labels are displayed in the {gtsummary} output table by default. Using {gtsummary} on a data frame without labels will simply print variable names in place of variable labels; there is also an option to add labels later."
+
+Makes a great table. Investigate why some SMDs are negative. 
+
+```{r}
+data %>%
+  mutate(across(all_of(cat), as.factor)) %>%
+  select (c("sex", "phu", "ster", "comorb", "matai", "care", 
+"par", "smk", "del", "multip", "rur", "quint", "comp", 
+"bf", "age", "futime", "seas", "bw", "gest", "exp_vax")) %>%
+  tbl_summary(by=exp_vax) %>%
+   add_difference(everything() ~ "smd") %>%
+  as_flex_table() %>%
+  flextable::save_as_docx(path="tbl1.docx")
+
+```
+
+
+

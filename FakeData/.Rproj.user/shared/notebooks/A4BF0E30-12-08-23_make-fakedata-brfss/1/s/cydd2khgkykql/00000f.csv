@@ -1,0 +1,6 @@
+"0","# load data"
+"0",""
+"0","brfss <- read_csv(here(""Data"", ""brfss2013.csv""))"
+"2","Warning: [38;5;252mOne or more parsing issues, call `problems()` on your data frame for details, e.g.:
+  dat <- vroom(...)
+  problems(dat)[39m"

@@ -1,0 +1,12 @@
+"0","data %>%
+  mutate(phu = case_when(phu %in% 1:10 ~ 1,
+                        phu %in% 11:20 ~ 2,
+                        phu %in% 21:30 ~ 3,
+                        phu %in% 31:40 ~ 4,
+                        phu %in% 41:50 ~ 5,
+                        phu %in% 51:70 ~ 6,
+                        TRUE ~ NA_real_)) %>%
+  filter(is.na(phu))
+"
+"2","filter: removed all rows (100%)
+"

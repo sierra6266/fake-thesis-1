@@ -1,0 +1,12 @@
+"0","# I had built in some NAs when I made the data. bw 5 is NA, gest age 4 is NA, del 0 is NA
+data = data %>%
+  mutate(bw = ifelse(bw==5, 4, bw),
+         gest = ifelse(gest==4, 3, gest),
+         del = ifelse(del==0, 2, del))
+"
+"2","mutate: changed 14 values (1%) of 'bw' (0 new NA)
+"
+"2","        changed 112 values (6%) of 'del' (0 new NA)
+"
+"2","        changed 62 values (3%) of 'gest' (0 new NA)
+"

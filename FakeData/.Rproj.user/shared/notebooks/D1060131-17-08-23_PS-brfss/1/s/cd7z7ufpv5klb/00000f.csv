@@ -1,0 +1,9 @@
+"0","# get the predicted values  
+data$ps = predict(fit.ps, type=""response"")
+"
+"2","Error in exists(cacheKey, where = .rs.WorkingDataEnv, inherits = FALSE) : 
+  invalid first argument
+"
+"2","Error in assign(cacheKey, frame, .rs.CachedDataEnv) : 
+  attempt to use zero-length variable name
+"

@@ -1,0 +1,137 @@
+---
+title: "PS and IPTW"
+author: "Sierra"
+date: "2023-08-17"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load libs
+```{r}
+library(MatchIt)
+library(WeightIt)
+library(survey)
+library(janitor)
+library(tidyr)
+library(summarytools)
+library(haven)
+library(here)
+library(coxed)
+library(tableone)
+library(tidyverse)
+library(ggplot2)
+library(tidylog)
+library(flextable)
+library(gtsummary)
+```
+
+## Load data
+```{r}
+data_missing <- read_csv(here("Data", "brf-fakedata-missing_17AUG23.csv")) 
+
+data = read_csv(here ("Data", "brf-fakedata-no-missing_17AUG23.csv")) 
+
+# make vectors of continuous and categorical vars
+
+cat = c("id", "sex", "phu", "ster", "out_ai", "comorb", "matai", "care", 
+"par", "smk", "del", "multip", "rur", "quint", "exp_vax", "comp", 
+"exp_flu", "bf", "seas", "gest")
+
+con = c("age", "futime","bw")
+```
+
+
+## Create propensity score model with log reg
+
+From SAS code:
+
+%let ps_vars=mom_ageD conc_season mult_birth obcomp2 obcomp3 obcomp7 pe abrup 
+			 m_asthma m_diabetes m_heart m_hyper mathp12 mathp13 mathp14 mathp17 mathp18 mathp19 mathp20 mathp21 
+			 mathp22 mathp23 mathp24 mathp25 mathp26 mathp27 steroids m_rural phu_region parity_cat m_incquint antenatal smoking_cat;
+			 
+```{r}
+# model specification for maternal vaccination
+# variables are the same ones from the SAS code plus maternal ai
+
+# 1. estimate ps using glm
+fit.ps = glm(exp_vax ~ age + factor(seas) + factor(multip) + factor(comp) + factor(comorb) + factor(ster) + factor(rur) + factor(phu) + factor(par) + factor(quint) + factor(care) + factor(smk) + factor(matai), data=data, family=binomial) 
+# get the predicted values  
+data$ps = predict(fit.ps, type="response")
+
+# apply the summary function to the two exposure groups
+tapply(data$ps, data$exp_vax, summary)
+```
+# Assess the overlap of the distributions
+by plotting them!
+
+```{r}
+
+# plots totally overlap? Maybe something went wrong.
+data %>%
+  mutate(exp_vax = as.factor(exp_vax)) %>%
+  ggplot(aes(x=ps, group=exp_vax, color= exp_vax)) +
+  geom_density() +
+  ggtitle("Propensity Scores") +
+  theme_light()
+
+```
+
+## Compute the weights
+
+Stabilize = T
+
+Mean of stabilized weights is ~ 1
+```{r}
+weights = weightit(exp_vax ~ age + factor(seas) + factor(multip) + factor(comp) + factor(comorb) + factor(ster) + factor(rur) + factor(phu) + factor(par) + factor(quint) + factor(care) + factor(smk) +factor(matai),
+                   data = data, 
+                   estimand = "ATE",
+                   stabilize = T,
+                   method = "ps")
+
+summary(weights$weights)
+```
+## Check balance in weighted pseudo-population
+with SMD tables and love plots
+Cobalt pulls out balanced statistics and flags which ones are above the level we specify (here, 0.10)
+
+```{r}
+require(cobalt)
+
+bal.tab(weights, un = T, thresholds = c(m = .1))
+# all of them are balanced now!
+
+love.plot(weights)
+ggsave("loveplot.png")
+```
+
+## survey package must be used to make weighted table one
+
+```{r}
+# make binary vars factors
+fct_data = data %>%
+  mutate(across(all_of(cat), as.factor))
+
+# convert df to survey object
+svy_data <-  survey::svydesign(
+    id = ~id,
+    weights = ~weights$weights,
+    data = fct_data)
+
+
+# only the vars included in the ps plus matai
+svy_data %>%
+  tbl_svysummary(
+    by = exp_vax,
+    include = c("phu", "ster", "comorb", "matai", "care", 
+"par", "smk", "multip", "rur", "quint", "comp", "age", "seas", "matai")) %>%
+  add_difference(everything() ~ "smd") %>%
+  as_flex_table() %>%
+  flextable::save_as_docx(path="tbl1-ps.docx")
+
+
+
+```
+

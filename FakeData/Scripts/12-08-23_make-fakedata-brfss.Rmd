@@ -1,0 +1,165 @@
+---
+title: "make brfss data"
+author: "Sierra"
+date: "2023-08-12"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Create vars for data creation
+```{r}
+# To change fmonth to season of conception
+spring = c("April", "May", "June")
+summer= c("July", "August", "September")
+fall = c("October", "November", "December")
+winter = c("January", "February", "March")
+
+# to aggregate the lower income categories
+low = c("Less than $10,000", "Less than $15,000", "Less than $20,000", "Less than $25,000")
+
+# create birthweight variable
+bw = floor(rnorm(465473, mean = 3100, sd = 385))
+
+# create gestational age variable
+gest = sample(x=c(1, 2, 3),
+      prob = c(.079, .915, .006),
+      size=465473, replace=TRUE)
+# check it
+prop.table(table(gest))
+
+# create 20,057 random IDs to increase NAs in exp_vax later
+nas = sample(1:491775, 34806, replace=F)
+```
+
+## Load data
+```{r}
+# load data
+
+brfss <- read_csv(here("Data", "brfss2013.csv"))
+```
+
+## create new data
+```{r}
+#create new 
+
+brf  =  brfss %>%
+  select(id, iday, sex, state, cvdinfr4, educa, X_raceg21, usenow3, checkup1,
+         X_chldcnt, fmonth, diabete3, X_rfbmi5, chckidny, bpmeds, drocdy3_, exerhmm1,
+         income2, flushot6, hivtst6, X_prace1, actin11_) %>%
+  rename(phu=state, ster=cvdinfr4, out_ai=educa, comorb=X_raceg21, matai=usenow3, care=checkup1,
+         par=X_chldcnt, smk=diabete3, del=X_rfbmi5, multip=chckidny, rur=bpmeds, 
+         quint=income2, exp_vax=flushot6, comp=hivtst6, exp_flu=X_prace1, bf=actin11_) %>%
+  mutate(exp_flu=ifelse(exp_flu =="Asian", 1, 0),
+         age = iday+15, 
+         age = case_when(age == 16 | is.na(age) ~ 32, 
+                         TRUE ~ age), # Bring up mean/median age
+        smk = case_when(smk == "No" ~ 1,
+                        smk == "Yes" ~ 3,
+                        smk == "No, pre-diabetes or borderline diabetes" ~ 2,
+                        TRUE ~ 4),
+         fu1 = 3650-drocdy3_,
+         fu2 = 3651-exerhmm1, 
+         futime = ifelse(!is.na(fu2), fu2, fu1), 
+         futime = ifelse(is.na(futime), (3651-smk), futime),
+         phu = as.factor(phu),
+         phu = as.numeric(phu),
+        phu = case_when(phu %in% 1:10 ~ 1,
+                        phu %in% 11:20 ~ 2,
+                        phu %in% 21:30 ~ 3,
+                        phu %in% 31:40 ~ 4,
+                        phu %in% 41:50 ~ 5,
+                        phu %in% 51:70 ~ 6,
+                        TRUE ~ NA_real_),
+         across(c(ster,del, multip, rur,exp_vax, comp) , ~ifelse( .x == "Yes", 1,
+                               ifelse(.x == "No", 0, NA_real_))),
+         matai=ifelse(matai=="Every day", 1, 0),
+         out_ai=ifelse(out_ai == "Never attended school or only kindergarten", 1, 0),
+         comorb = ifelse(comorb == "Non-White or Hispanic", 1, 0),
+         par = sub(" .*", "", par), # truncate the variable to the characters before the first space
+         par = recode(par,
+                      No = 0,
+                      One = 1,
+                      Two = 2,
+                      Three = 3,
+                      Four = 4,
+                      Five = 5),
+        exp_vax = ifelse(id %in% nas, NA_real_, exp_vax), 
+        seas = case_when (fmonth %in% spring ~ 1,
+                           fmonth %in% summer ~ 2,
+                           fmonth %in% fall ~ 3,
+                           fmonth %in% winter ~ 4, 
+                           TRUE ~ NA_real_),
+         sex = ifelse(sex == "Female", 1, 0),
+         bf = case_when (bf == "Moderate" ~ 1,
+                        bf == "Vigorous" ~ 3,
+                         bf == "Not Moderate or Vigorous or No Activity" ~ 2,
+                         TRUE ~ NA_real_),
+         quint = case_when (quint == "$75,000 or more" ~ 5,
+                            quint %in% low ~ 1,
+                            quint ==  "Less than $35,000" ~ 2,
+                            quint ==  "Less than $50,000" ~ 3,
+                            quint == "Less than $75,000" ~ 4,
+                            TRUE ~ NA_real_),
+         rur = ifelse(! is.na(rur), rur, # Want to reduce number of missing. If it is not missing, keep it the original value
+                      ifelse(quint ==4, 0, 1)), # using the proportion of quint 4 (15%) to maintain proportions of rural/urban
+         care = case_when(care=="Within past year" ~ 4,
+                          care == "Within past 2 years" ~ 2,
+                          care == "Never" ~ 3,
+                          care == "Within past 5 years" ~ 1,
+                          care == "5 or more years ago" ~ 5,
+                          TRUE ~ NA_real_)) %>% # changing care to numeric so must use NA_real_ 
+  drop_na(c("out_ai", "exp_flu", "comorb", "sex", "matai")) %>%
+  select(-c(iday, drocdy3_, exerhmm1, fu1, fu2, fmonth))
+
+# add bw and gest to df
+
+brf$bw = bw
+brf$gest = gest
+```
+
+## check distributions
+```{r}
+prop.table(table(test$out_ai))
+
+stview(dfSummary(brf))
+
+
+brf %>%
+  select (id, rur) %>%
+  filter(is.na(rur)) %>%
+  mutate(y = ifelse(id %%2 >0, 1, 0)) %>%
+  tabyl(y)
+
+
+test %>%
+  group_by(age)%>%
+  tabyl(age)
+
+```
+
+## output missing data. 465473 rows x 23 vars
+```{r}
+#output data
+write.csv(brf, file=here::here("Data","brf-fakedata-missing_12AUG23.csv"), row.names=FALSE)
+```
+
+# create complete case data. 
+```{r}
+
+brf_nomiss = na.omit(brf)
+
+stview(dfSummary(brf_nomiss))
+  
+```
+
+## output non missing data. 229753 x 23 vars
+
+```{r}
+#output data
+write.csv(brf_nomiss, file=here::here("Data","brf-fakedata-no-missing_12AUG23.csv"), row.names=FALSE)
+```
+

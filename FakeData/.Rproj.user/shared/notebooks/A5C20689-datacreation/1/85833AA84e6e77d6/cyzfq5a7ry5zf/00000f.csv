@@ -1,8 +1,0 @@
-"0","data= data %>%
-  relocate(id) %>%
-  mutate(age=as.numeric(age))
-"
-"2","relocate: no changes
-"
-"2","mutate: converted 'age' from character to double (0 new NA)
-"

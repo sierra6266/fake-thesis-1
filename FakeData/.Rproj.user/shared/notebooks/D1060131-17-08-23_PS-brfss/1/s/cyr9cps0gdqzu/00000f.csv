@@ -1,0 +1,4 @@
+"0","love.plot(weights)
+"
+"2","Error in love.plot(weights) : could not find function ""love.plot""
+"

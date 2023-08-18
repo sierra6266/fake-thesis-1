@@ -1,0 +1,11 @@
+"0","# print them as a vector
+dput(x)
+"
+"1","c(""id"", ""age"", ""ageg"", ""bf"", ""bw"", ""care"", ""comorb"", ""comp"", 
+"
+"1","""del"", ""exp_flu"", ""exp_vax"", ""gest"", ""matai"", ""multip"", ""out_ai"", 
+"
+"1","""par"", ""phu"", ""quint"", ""rur"", ""seas"", ""sex"", ""smk"", ""ster"", ""y"", 
+"
+"1","""failed"")
+"
