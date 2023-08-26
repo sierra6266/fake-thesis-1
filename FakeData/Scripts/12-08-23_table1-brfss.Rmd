@@ -107,9 +107,11 @@ t1_crude = CreateTableOne(strata= "exp_vax", vars = vars, data=data, test=F)
 print(t1_crude, smd=T)
 # ster, comorb, care, par, smk, rur, quint, br all above 0.10
 
+
+
 # check missing data set
-t1_crude_miss = CreateTableOne(strata= "exp_vax", vars = vars, data=data_missing, test=F)
-print(t1_crude_miss, smd=T)
+#t1_crude_miss = CreateTableOne(strata= "exp_vax", vars = vars, data=data_missing, test=F)
+#print(t1_crude_miss, smd=T)
   
 
 
@@ -123,13 +125,12 @@ Makes a great table. Investigate why some SMDs are negative.
 ```{r}
 data %>%
   mutate(across(all_of(cat), as.factor)) %>%
-  select (c("sex", "phu", "ster", "comorb", "matai", "care", 
-"par", "smk", "del", "multip", "rur", "quint", "comp", 
-"bf", "age", "futime", "seas", "bw", "gest", "exp_vax")) %>%
+  select (c("phu", "ster", "comorb", "matai", "care", 
+"par", "smk", "multip", "rur", "quint", "comp", "age", "seas", "bw", "gest", "exp_vax", "sex", "del", "bf", "futime")) %>%
   tbl_summary(by=exp_vax) %>%
    add_difference(everything() ~ "smd") %>%
   as_flex_table() %>%
-  flextable::save_as_docx(path="tbl1.docx")
+  save_as_docx(path = here("Output", "20-08-23_tbl1.docx"))
 
 ```
 

@@ -10,7 +10,14 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ## Load libs
-```{r}
+```{r, message=FALSE, warning=FALSE}
+library(epiR)
+library(lubridate)
+library(survminer)
+library(survival)
+library(adjustedCurves)
+library(jtools)
+library(cobalt)
 library(MatchIt)
 library(WeightIt)
 library(survey)
@@ -27,6 +34,12 @@ library(tidylog)
 library(flextable)
 library(gtsummary)
 ```
+## Create date var
+```{r}
+today = Sys.Date()
+
+```
+
 
 ## Load data
 ```{r}
@@ -41,7 +54,25 @@ cat = c("id", "sex", "phu", "ster", "out_ai", "comorb", "matai", "care",
 "exp_flu", "bf", "seas", "gest")
 
 con = c("age", "futime","bw")
+
 ```
+## Df Summary
+```{r}
+stview(dfSummary(data))
+```
+
+
+## Crude table 1
+```{r}
+data %>%
+  mutate(across(all_of(cat), as.factor)) %>%
+  select (c("phu", "ster", "comorb", "matai", "care", 
+"par", "smk", "multip", "rur", "quint", "comp", "age", "seas", "bw", "gest", "exp_vax", "sex", "del", "bf")) %>%
+  tbl_summary(by=exp_vax) %>%
+   add_difference(everything() ~ "smd") %>%
+  as_flex_table()
+```
+
 
 
 ## Create propensity score model with log reg
@@ -98,13 +129,11 @@ with SMD tables and love plots
 Cobalt pulls out balanced statistics and flags which ones are above the level we specify (here, 0.10)
 
 ```{r}
-require(cobalt)
-
 bal.tab(weights, un = T, thresholds = c(m = .1))
 # all of them are balanced now!
 
 love.plot(weights)
-ggsave("loveplot.png")
+#ggsave("loveplot.png")
 ```
 
 ## survey package must be used to make weighted table one
@@ -122,16 +151,86 @@ svy_data <-  survey::svydesign(
 
 
 # only the vars included in the ps plus matai
-svy_data %>%
+tbl1_wght = svy_data %>%
   tbl_svysummary(
     by = exp_vax,
     include = c("phu", "ster", "comorb", "matai", "care", 
-"par", "smk", "multip", "rur", "quint", "comp", "age", "seas", "matai")) %>%
+"par", "smk", "multip", "rur", "quint", "comp", "age", "seas")) %>%
   add_difference(everything() ~ "smd") %>%
-  as_flex_table() %>%
-  flextable::save_as_docx(path="tbl1-ps.docx")
+  as_flex_table() 
+
+tbl1_wght
+
+tbl1_wght %>%
+  save_as_docx(path = here("Output", paste0(today,"_tbl1-weighted.docx")))
+```
 
 
+## Adjusted survival curves from adjustedCurves package
+```{r}
+
+# outcome must be numeric or logical but exposure must be factor
+d2 = data %>%
+  mutate(exp_vax = as.factor(exp_vax))
+
+# create log model
+
+glm_mod = glm(exp_vax ~ age + factor(seas) + factor(multip) + factor(comp) + factor(comorb) + factor(ster) + factor(rur) + factor(phu) + factor(par) + factor(quint) + factor(care) + factor(smk) +factor(matai),
+                   data = d2, 
+                   family = "binomial" (link="logit"))
+
+# calc adjusted survival curves and plot them
+
+adjsurv = adjustedsurv(data=d2, 
+                       variable = "exp_vax",
+                       ev_time = "futime",
+                       event = "out_ai",
+                       method = "iptw_cox",
+                       treatment_model=glm_mod,
+                       conf_int = T)
+
+plot(adjsurv)
+```
+## Cox PH
+```{r}
+# crude Cox PH model
+cox_model_crude <- coxph(Surv(futime, out_ai) ~ exp_vax, 
+                         data = data)
+# get HR estimates
+cox_fit_crude  <- cox_model_crude %>% 
+  broom::tidy(., conf.int = T, exponentiate = T)
+
+#summary 
+summary(cox_model_crude)
+
+# IPTW Cox PH model
+cox_model_iptw <- coxph(Surv(futime, out_ai) ~ exp_vax, 
+                        data = data, 
+                        weights = weights$weights)
+# get HR estimates
+cox_fit_iptw  <- cox_model_iptw %>% 
+  broom::tidy(., conf.int = T, exponentiate = T)
+
+#summary
+
+summary(cox_model_iptw)
+
+# Put HRs into a table
+cox_fit_crude %>% bind_rows(cox_fit_iptw)
 
 ```
+## Another surival plot
+
+This one is not right
+```{r}
+ggsurvplot(survfit(cox_model_iptw), 
+           data=data,
+           ggtheme = theme_minimal())
+```
+
+
+
+
+
+
 
