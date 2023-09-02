@@ -50,15 +50,15 @@ trunc_norm <- function(mean, sd, lower, upper) {
 
 ## Load data
 ```{r}
-data_missing <- read_csv(here("Data", "brf-fakedata-missing_17AUG23.csv")) 
+#data_missing <- read_csv(here("Data", "brf-fakedata-missing_17AUG23.csv")) 
 
-data = read_csv(here ("Data", "brf-fakedata-no-missing_17AUG23.csv")) 
+data = read_csv(here ("Data", "ind-ai-no-missing_28AUG23.csv")) 
 
 # make vectors of continuous and categorical vars
 
 cat = c("id", "sex", "phu", "ster", "out_ai", "comorb", "matai", "care", 
 "par", "smk", "del", "multip", "rur", "quint", "exp_vax", "comp", 
-"exp_flu", "bf", "seas", "gest")
+"exp_flu", "bf", "seas", "gest", "itp", "jia", "t1d", "ibd", "celiac", "vasc", "sjo", "glom")
 
 con = c("age", "futime","bw")
 

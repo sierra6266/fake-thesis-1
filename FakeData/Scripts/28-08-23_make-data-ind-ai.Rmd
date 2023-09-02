@@ -1,0 +1,85 @@
+---
+title: "Untitled"
+author: "Sierra"
+date: "2023-08-28"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## load data
+```{r}
+data = read_csv(here ("Data", "brf-fakedata-no-missing_17AUG23.csv")) 
+```
+
+
+
+## Create  individual AI outcomes
+
+```{r}
+# itp
+
+itp = sample(x=c("0", "1"),
+      prob = c(.999958, 0.000042),
+      size=s,
+replace=TRUE)
+
+# jia
+
+jia = sample(x=c("0", "1"),
+      prob = c(.999829, 0.000171),
+      size=s,
+replace=TRUE)
+
+# t1d
+t1d = sample(x=c("0", "1"),
+      prob = c(.99985, 0.00015),
+      size=s,
+replace=TRUE)
+
+#ibd
+ibd = sample(x=c("0", "1"),
+      prob = c(.999868, 0.000132),
+      size=s,
+replace=TRUE)
+
+# celiac
+celiac = sample(x=c("0", "1"),
+      prob = c(.999927, 0.000073),
+      size=s,
+replace=TRUE)
+
+# vasc
+vasc = sample(x=c("0", "1"),
+      prob = c(.9995, 0.0005),
+      size=s,
+replace=TRUE)
+
+# sjo
+sjo = sample(x=c("0", "1"),
+      prob = c(.99995, 0.00005),
+      size=s,
+replace=TRUE)
+
+# glom
+glom = sample(x=c("0", "1"),
+      prob = c(.99978, 0.00022),
+      size=s,
+replace=TRUE)
+
+#add to data
+
+data = data %>%
+  cbind(itp, jia, t1d, ibd, celiac, vasc, sjo, glom) %>%
+   mutate_at (1:31, as.numeric) %>%
+  mutate(out_ai = ifelse(itp+jia+t1d+ibd+celiac+vasc+sjo+glom >= 1, 1, 0))
+```
+
+
+
+## output non missing data. 229753 x 31 vars
+
+```{r}
+#output data
+write.csv(data, file=here::here("Data","ind-ai-no-missing_28AUG23.csv"), row.names=FALSE)

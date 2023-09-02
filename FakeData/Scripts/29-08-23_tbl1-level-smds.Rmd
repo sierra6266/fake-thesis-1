@@ -1,0 +1,560 @@
+---
+title: "PS and IPTW"
+author: "Sierra"
+date: "2023-08-29"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load libs
+```{r, message=FALSE, warning=FALSE}
+library(epiR)
+library(data.table)
+library(sjlabelled)
+library(reshape2)
+library(fastDummies)
+library(smd)
+library(lubridate)
+library(survminer)
+library(survival)
+library(adjustedCurves)
+library(jtools)
+library(cobalt)
+library(MatchIt)
+library(WeightIt)
+library(survey)
+library(janitor)
+library(tidyr)
+library(summarytools)
+library(haven)
+library(here)
+library(coxed)
+library(tableone)
+library(tidyverse)
+library(ggplot2)
+library(tidylog)
+library(flextable)
+library(gtsummary)
+```
+## Create date var
+```{r}
+today = Sys.Date()
+
+```
+
+
+## Load data
+```{r}
+#data_missing <- read_csv(here("Data", "brf-fakedata-missing_17AUG23.csv")) 
+
+data = read_csv(here("Data","ind-ai-no-missing_28AUG23.csv")) 
+
+# make vectors of continuous and categorical vars
+
+cat = c("id", "sex", "phu", "ster", "out_ai", "comorb", "matai", "care", 
+"par", "smk", "del", "multip", "rur", "quint", "exp_vax", "comp", 
+"exp_flu", "bf", "seas", "gest", "itp", "jia", "t1d", "ibd", "celiac", "vasc", "sjo", "glom")
+
+con = c("age", "futime","bw")
+
+covs = c("phu", "ster", "comorb", "matai","itp", "jia", "t1d", "ibd", "celiac", "vasc", "sjo", "glom", "care", "par", "smk", "multip", "rur", "quint", "comp", "age", "seas", "bw", "gest", "sex", "del", "bf")
+
+
+```
+## Df Summary
+```{r}
+stview(dfSummary(data))
+```
+
+## Create smd formula to calculate it for each level, not the overall variable
+```{r}
+lvlsmd <- function(data, variable, by, tbl, ...) {
+  smd(data[[variable]] ~ as.factor(data[[by]]))
+}
+
+
+t1 = data %>%
+  mutate(across(all_of(cat), as.factor)) %>%
+  select (c("phu", "ster", "comorb", "matai","itp", "jia", "t1d", "ibd", "celiac", "vasc", "sjo", "glom", "care", 
+"par", "smk", "multip", "rur", "quint", "comp", "age", "seas", "bw", "gest", "sex", "del", "bf", "exp_vax")) %>%
+  tbl_summary(by=exp_vax) %>%
+  add_stat(fns = everything() ~ SMD_value)
+```
+```{r}
+SMD_value <- function(x, ...) {
+  # Construct vectors of data y, and groups (strata) g
+  y <- unlist(x)
+  g <- factor(rep(1:length(x), times=sapply(x, length)))
+  if (is.numeric(y)) {
+    # For numeric variables
+    try({a<-data.frame(y)
+    a$g<-g
+    smd<-(as.data.frame(stddiff.numeric(data=a,gcol = "g", vcol = "y")))$stddiff
+    },silent=TRUE)
+  } else {
+  # For categorical variables
+    try({
+      a<-data.frame(y)
+      a$g<-g
+      smd<-(abs((bal.tab(a, treat = "g",data=a,binary="std",continuous =         
+ "std",s.d.denom = "pooled",stats=c("mean.diffs"))$Balance)$Diff.Un))
+    },silent=TRUE)
+  }
+  c("",format(smd,digits=2)) #Formatting number of digits
+}
+
+```
+
+
+```{r}
+
+d2 = data %>%
+  mutate(across(all_of(cat), as.factor)) %>%
+  select (c("phu", "ster", "comorb", "matai","itp", "jia", "t1d", "ibd", "celiac", "vasc", "sjo", "glom", "care", 
+"par", "smk", "multip", "rur", "quint", "comp", "age", "seas", "bw", "gest", "sex", "del", "bf", "exp_vax")) %>%
+  fastDummies::dummy_cols()
+
+
+# tbl summary will give me them for each level if I make them all dummy vars
+d2 %>%
+  select (-c("phu", "ster", "comorb", "matai","itp", "jia", "t1d", "ibd", "celiac", "vasc", "sjo", "glom", "care", "par", "smk", "multip", "rur", "quint", "comp", "seas", "gest", "sex", "del", "bf", "exp_vax")) %>%
+  tbl_summary(by=exp_vax) %>%
+   add_difference(everything() ~ "smd") %>%
+  as_flex_table()
+```
+
+
+
+## Crude table 1
+```{r}
+data %>%
+  mutate(across(all_of(cat), as.factor)) %>%
+  select (c("phu", "ster", "comorb", "matai","itp", "jia", "t1d", "ibd", "celiac", "vasc", "sjo", "glom", "care", 
+"par", "smk", "multip", "rur", "quint", "comp", "age", "seas", "bw", "gest", "sex", "del", "bf", "exp_vax")) %>%
+  tbl_summary(by=exp_vax) %>%
+  add_overall() %>%
+  modify_spanning_header(c(estimate)  ~ "**2009 A/H1N1 influenza vaccination in pregnancy (unweighted)**") 
+
+#%>%   as_flex_table()
+
+
+
+t1 = data %>%
+  mutate(across(all_of(cat), as.factor)) %>%
+  select (c("phu", "ster", "comorb", "matai","itp", "jia", "t1d", "ibd", "celiac", "vasc", "sjo", "glom", "care", 
+"par", "smk", "multip", "rur", "quint", "comp", "age", "seas", "bw", "gest", "sex", "del", "bf", "exp_vax")) %>%
+  tbl_summary(by=exp_vax) %>%
+  add_overall() %>%
+  modify_spanning_header(c(stat_1, stat_2)  ~ "**2009 A/H1N1 influenza vaccination in pregnancy (unweighted)**") 
+
+#%>%   as_flex_table()
+
+show_header_names(t1)
+
+t1
+```
+
+## Hmisc to relabel things
+```{r}
+### Explore this as way to label variables and levels
+# https://cran.r-project.org/web/packages/Hmisc/Hmisc.pdf
+FEV2 <- upData(FEV,
+rename=c(smoking='smoke'),
+levels=list(sex =list(female=0,male=1),
+smoke=list('non-current smoker'=0,
+'current smoker'=1)),
+units=list(age='years', fev='L', height='inches'),
+labels=list(fev='Forced Expiratory Volume'))
+# An alternative to levels=list(\dots) is for example
+# upData(FEV, sex=factor(sex,0:1,c('female','male'))).
+#
+# Note that we saved the changed data frame into a
+# new data frame FEV2. If we were confident of the
+# correctness of our changes we could have stored
+# the new data frame on top of the old one, under
+# the original name FEV.
+
+```
+
+
+
+## Create propensity score model with log reg
+
+From SAS code:
+
+%let ps_vars=mom_ageD conc_season mult_birth obcomp2 obcomp3 obcomp7 pe abrup 
+			 m_asthma m_diabetes m_heart m_hyper mathp12 mathp13 mathp14 mathp17 mathp18 mathp19 mathp20 mathp21 
+			 mathp22 mathp23 mathp24 mathp25 mathp26 mathp27 steroids m_rural phu_region parity_cat m_incquint antenatal smoking_cat;
+			 
+```{r}
+# model specification for maternal vaccination
+# variables are the same ones from the SAS code plus maternal ai
+
+# 1. estimate ps using glm
+fit.ps = glm(exp_vax ~ age + factor(seas) + factor(multip) + factor(comp) + factor(comorb) + factor(ster) + factor(rur) + factor(phu) + factor(par) + factor(quint) + factor(care) + factor(smk) + factor(matai) +factor(itp)+factor(jia)+factor(t1d)+factor(ibd)+factor(celiac)+factor(vasc)+factor(sjo)+factor(glom),
+             data=data, family=binomial) 
+# get the predicted values  
+data$ps = predict(fit.ps, type="response")
+
+# apply the summary function to the two exposure groups
+tapply(data$ps, data$exp_vax, summary)
+
+
+```
+# Assess the overlap of the distributions
+by plotting them!
+
+```{r}
+
+# plots totally overlap? Maybe something went wrong.
+data %>%
+  mutate(exp_vax = as.factor(exp_vax)) %>%
+  ggplot(aes(x=ps, group=exp_vax, color= exp_vax)) +
+  geom_density() +
+  ggtitle("Propensity Scores") +
+  theme_light()
+
+```
+
+## Compute the weights
+
+Stabilize = T
+
+Mean of stabilized weights is ~ 1
+```{r}
+weights = weightit(exp_vax ~ age + factor(seas) + factor(multip) + factor(comp) + factor(comorb) + factor(ster) + factor(rur) + factor(phu) + factor(par) + factor(quint) + factor(care) + factor(smk) + factor(matai) +factor(itp)+factor(jia)+factor(t1d)+factor(ibd)+factor(celiac)+factor(vasc)+factor(sjo)+factor(glom),
+                   data = data, 
+                   estimand = "ATE",
+                   stabilize = T,
+                   method = "ps")
+
+summary(weights$weights)
+```
+## Check balance in weighted pseudo-population
+with SMD tables and love plots
+Cobalt pulls out balanced statistics and flags which ones are above the level we specify (here, 0.10)
+
+```{r}
+bal.tab(weights, un = T, thresholds = c(m = .1))
+# all of them are balanced now!
+
+d2 = data %>%
+  mutate(across(all_of(cat), as.factor))
+
+c2 = subset(d2, select = covs)
+  
+
+b = bal.tab(exp_vax ~ c2, data=data,
+        weights = weights$weights,
+        estimand="ATE",
+        disp = c("means"), un = TRUE,
+        stats = c("mean.diffs")) 
+
+# Make the balance results a df
+b1=b$Balance
+
+# create a column with the rownames
+b1$names <- rownames(b1)
+
+
+love.plot(weights)
+#ggsave("loveplot.png")
+
+```
+
+```{r}
+
+
+balpop = bal.tab(weights)
+
+balpop$Balance
+
+```
+
+
+
+## survey package must be used to make weighted table one
+
+```{r}
+# make binary vars factors
+fct_data = data %>%
+  mutate(across(all_of(cat), as.factor))
+
+# convert df to survey object
+svy_data <-  survey::svydesign(
+    id = ~id,
+    weights = ~weights$weights,
+    data = fct_data)
+
+
+# only the vars included in the ps plus matai
+tbl1_wght = svy_data %>%
+  tbl_svysummary(
+    by = exp_vax,
+    include = c("phu", "ster", "comorb", "matai", "care", 
+"par", "smk", "multip", "rur", "quint", "comp", "age", "seas")) %>%
+  add_difference(everything() ~ "smd") %>%
+  as_flex_table() 
+
+tbl1_wght
+
+tbl1_wght %>%
+  save_as_docx(path = here("Output", paste0(today,"_tbl1-weighted.docx")))
+```
+
+
+## Adjusted survival curves from adjustedCurves package
+```{r}
+
+# outcome must be numeric or logical but exposure must be factor
+d2 = data %>%
+  mutate(exp_vax = as.factor(exp_vax))
+
+# create log model
+
+glm_mod = glm(exp_vax ~ age + factor(seas) + factor(multip) + factor(comp) + factor(comorb) + factor(ster) + factor(rur) + factor(phu) + factor(par) + factor(quint) + factor(care) + factor(smk) + factor(matai) +factor(itp)+factor(jia)+factor(t1d)+factor(ibd)+factor(celiac)+factor(vasc)+factor(sjo)+factor(glom),
+                   data = d2, 
+                   family = "binomial" (link="logit"))
+
+# calc adjusted survival curves and plot them
+
+adjsurv = adjustedsurv(data=d2, 
+                       variable = "exp_vax",
+                       ev_time = "futime",
+                       event = "out_ai",
+                       method = "iptw_cox",
+                       treatment_model=glm_mod,
+                       conf_int = T)
+
+plot(adjsurv)
+```
+## Cox PH
+```{r}
+# crude Cox PH model
+cox_model_crude <- coxph(Surv(futime, out_ai) ~ exp_vax, 
+                         data = data)
+# get HR estimates
+cox_fit_crude  <- cox_model_crude %>% 
+  broom::tidy(., conf.int = T, exponentiate = T)
+
+#summary 
+summary(cox_model_crude)
+
+# IPTW Cox PH model
+cox_model_iptw <- coxph(Surv(futime, out_ai) ~ exp_vax, 
+                        data = data, 
+                        weights = weights$weights)
+# get HR estimates
+cox_fit_iptw  <- cox_model_iptw %>% 
+  broom::tidy(., conf.int = T, exponentiate = T)
+
+#summary
+
+summary(cox_model_iptw)
+
+# Put HRs into a table
+cox_fit_crude %>% bind_rows(cox_fit_iptw)
+
+```
+## Another surival plot
+
+This one is not right
+```{r}
+ggsurvplot(survfit(cox_model_iptw), 
+           data=data,
+           ggtheme = theme_minimal())
+```
+
+## what I want to do:
+
+For each column and row in data:
+match the data$col to key$old.name,
+add key$new.name as the data$col label,
+find the data level value in key$old.lvl,
+apply key$new.lvl (same index in list)
+
+```{r}
+
+
+key$new.lvl[match(data, key$old.lvl) ]
+```
+
+
+```{r}
+for(i in 1:nrow(df)) {
+  df$var5[i] <- df[which(colnames(df)==df$var4[i]), i]
+}
+
+
+df$var5 <- unlist(sapply(seq_along(df), function(x) df[x, match(df$var4[x], names(df))]))
+```
+
+
+
+```{r}
+key = read_csv(here("Data", "01-09-23_fakedata-label-key.csv"))
+
+test = data
+  
+  
+x = for(i in 1:nrow(data)) {
+  mutate(data$new.label = case_when (colnames(data) == key$old.name ~ key$new.name,
+                            TRUE ~ colnames(data)))
+}
+
+
+```
+
+
+
+```{r}
+df2 <- df1 %>% 
+  select(-Variables) %>% 
+  gather(Year, val,`2000`:`2001`) %>% 
+  spread(Varcode, val)
+df2
+
+
+Lbl <- df1 %>% 
+  distinct(Varcode, Variables)
+for (i in seq_len(nrow(Lbl))) {
+  Hmisc::label(df2[[Lbl$Varcode[i]]]) <- Lbl$Variables[i]
+}
+str(df2)
+```
+
+```{r}
+lbl <- key %>%
+  distinct(old.name, new.name)
+
+
+
+
+
+for (i in seq_len(nrow(lbl))) {
+  Hmisc::label(data[[lbl$old.name[i]]]) <- Lbl$Variables[i]
+}
+str(df2)
+lbl
+```
+## trying to make the new.lvls a list so that I can assign them but it's not working
+
+```{r}
+
+
+kf = key %>%
+  select(old.name, new.lvl) %>%
+  mutate(new.lvl = strsplit(new.lvl, ",")) %>%
+  pivot_wider(
+    names_from = old.name,
+    values_from = new.lvl)
+  
+kf2 = as.list(kf)
+
+print(kf2)
+
+
+get.label = Vectorize(
+  function(colnames) {
+    kf2$colnames[[diagnosis.code]]
+  })
+
+
+tst = d2 %>% 
+  mutate(label = get.label(colnames))
+
+
+bf2 = strsplit(kf2$bf," ")
+
+keyflip = key %>%
+  list(strsplit(key$new.lvl, ","))
+
+
+labels <- list("no diagnosis", "depression", "anxiety", "bipolar")
+# This is the function to contain your code for assigning labels
+# based on values in your data set. Replace this with whatever
+# logic you have. In this example, I've assumed that the values
+# we are labeling are all integers we could use to look up labels.
+get.label = Vectorize(
+  function(diagnosis.code) {
+    labels[[diagnosis.code]]
+  })
+
+# Example data.
+ex2 = data.frame(diagnosis.codes = c(1, 3, 2, 2, 1))
+
+# Create a new column "label" by applying your function to the
+# values in another column.
+ex3 = ex2 %>% mutate(label = get.label(diagnosis.codes))
+```
+
+```{r}
+labels_list <- structure(list(Variable = structure(c(1L, 1L, 1L, 2L, 2L, 2L, 
+2L, 3L, 3L, 3L, 3L, 3L, 4L, 4L, 4L, 4L, 4L, 4L), .Label = c("A1", 
+"B1", "C1", "D1"), class = "factor"), Value = c(1L, 2L, 3L, 1L, 
+2L, 3L, 4L, 1L, 2L, 3L, 4L, 5L, 1L, 2L, 3L, 4L, 5L, 6L), Label = structure(c(15L, 
+3L, 18L, 17L, 8L, 12L, 16L, 5L, 1L, 7L, 14L, 13L, 11L, 10L, 9L, 
+2L, 4L, 6L), .Label = c("Atlanta", "Bill", "Blue", "Bob", "Boston", 
+"Brian", "Dallas", "Down", "Jake", "Jim", "John", "Left", "Los_Angeles", 
+"New_York", "Red", "Right", "Up", "Yellow"), class = "factor")), class = "data.frame", row.names = c(NA, 
+-18L))
+
+df <- tibble(A1 = rep(1:3,2),
+            B1 = c(1:4, 1, 2),
+            C1 = c(1:5, 1),
+            D1 = 1:6
+            )
+
+
+df %>%
+  gather(key = Variable, value = Value) %>%
+  left_join(labels_list, by = c("Variable", "Value")) %>%
+  select(-Value) %>%
+  group_by(Variable) %>%
+  mutate(row = row_number()) %>%
+  spread(key = Variable, value = Label)
+```
+
+
+## Change data from numbers to words
+```{r}
+# Make key longer so that each old level gets its own row
+
+key2 = key %>%
+  separate_rows(old.lvl, new.lvl, sep=",") %>%
+  mutate(old.lvl = as.numeric(old.lvl)) %>%
+  filter(!is.na(old.lvl))
+
+# inspect 19 rows only in y
+dd3 = data %>%
+  pivot_longer(
+    cols=!id,
+    names_to = "old.name",
+    values_to = "old.lvl") %>%
+  left_join(key2, by = c("old.name", "old.lvl")) %>%
+  mutate(new.lvl = ifelse(is.na(new.lvl), old.lvl, new.lvl),
+         new.name = ifelse(is.na(new.name), old.name, new.name)) %>%
+  select(-c(old.lvl, old.name)) %>%
+  group_by(id) %>%
+  pivot_wider (
+    names_from = new.name,
+    values_from = new.lvl
+  ) #keep new names and levels
+
+stview(dfSummary(dd3))
+```
+# Applying sjlabelled labels works but they are not used by gtsummary or ggplot
+```{r}
+
+library(sjlabelled)
+library(ggeasy)
+
+d5 <- set_labels(data, labels = strsplit(key$new.lvl[match(names(data), key$old.name)], ","))
+
+get_labels(d5)
+
+```
+

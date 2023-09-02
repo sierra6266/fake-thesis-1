@@ -1,0 +1,131 @@
+---
+title: "Untitled"
+author: "Sierra"
+date: "2023-08-29"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+
+# https://stackoverflow.com/questions/74132478/how-to-calculate-standardized-mean-difference-for-table1-package-in-r
+
+# Install Packages---------------------------------------------------
+library(stddiff)
+library(cobalt)
+library(table1)
+library(Hmisc)
+
+#Using 'mtcars' as an example
+my_data<-mtcars
+
+# Format variables--------------------------------------------------------------
+
+# amd - Transmission (0 = automatic; 1 = manual)
+my_data$am <-factor(my_data$am,
+                levels = c(0,1),
+                labels =c("Automatic","Manual"))
+
+label(my_data$am) <-"Transmission Type" #adding a label for the variable
+
+# vs - Engine (0 = V-shaped, 1 = Straight)
+my_data$vs <-factor(my_data$vs,
+                levels = c(0,1),
+                labels =c("V-shaped","Straight"))
+
+label(my_data$vs) <-"Engine"
+
+# Adding a label to the numeric variables
+label(my_data$mpg)<-"Miles per gallon"
+label(my_data$hp)<-"Horsepower"
+
+# SMD FUNCTION------------------------------------------------------------------
+SMD_value <- function(x, ...) {
+  # Construct vectors of data y, and groups (strata) g
+  y <- unlist(x)
+  g <- factor(rep(1:length(x), times=sapply(x, length)))
+  if (is.numeric(y)) {
+    # For numeric variables
+    try({a<-data.frame(y)
+    a$g<-g
+    smd<-(as.data.frame(stddiff.numeric(data=a,gcol = "g", vcol = "y")))$stddiff
+    },silent=TRUE)
+  } else {
+  # For categorical variables
+    try({
+      a<-data.frame(y)
+      a$g<-g
+      smd<-(abs((bal.tab(a, treat = "g",data=a,binary="std",continuous =         
+ "std",s.d.denom = "pooled",stats=c("mean.diffs"))$Balance)$Diff.Un))
+    },silent=TRUE)
+  }
+  c("",format(smd,digits=2)) #Formatting number of digits
+}
+
+
+# CONTINUOUS VARIABLES FORMATTING-----------------------------------------------
+my.render.cont <- function(x) {
+  with(stats.default(x), 
+   c("",
+     
+     "Mean (SD)" = sprintf("%s (%s)",
+                           round_pad(MEAN, 1),
+                           round_pad(SD, 1)),
+     
+     "Median (IQR)" = sprintf("%s (%s, %s)",
+                              round_pad(MEDIAN, 1), 
+                              round_pad(Q1, 1), 
+                              round_pad(Q3, 1)))
+  )}
+
+# Creating the final table-----------------------------------------------------
+Table1<-table1(~ vs + mpg + hp  | am, 
+           data=my_data,
+           overall = FALSE, 
+           render.continuous = my.render.cont, 
+           extra.col=list(`SMD`=SMD_value)) #SMD Column
+
+Table1 #displays final table
+
+### My try
+
+d2 = data %>%
+  mutate(across(all_of(cat), as.factor)) %>%
+  select (c("phu", "ster", "comorb", "matai","itp", "jia", "t1d", "ibd", "celiac", "vasc", "sjo", "glom", "care", 
+"par", "smk", "multip", "rur", "quint", "comp", "age", "seas", "bw", "gest", "sex", "del", "bf", "exp_vax"))
+
+table1(~ age + factor(seas) + factor(multip) + factor(comp) + factor(comorb) + factor(ster) + factor(rur) + factor(phu) + factor(par) + factor(quint) + factor(care) + factor(smk) + factor(matai) +factor(itp)+factor(jia)+factor(t1d)+factor(ibd)+factor(celiac)+factor(vasc)+factor(sjo)+factor(glom) | as.factor(exp_vax), 
+           data=data,
+           overall = FALSE, 
+           render.continuous = my.render.cont, 
+           extra.col=list(`SMD`=SMD_value)) #SMD Column
+
+
+
+
+data %>%
+  slice(1:10000) %>%
+  SMD_value()
+```
+```{r}
+x = data %>%
+  mutate(across(all_of(cat), as.factor)) %>%
+  select (c("phu", "ster", "comorb", "matai","itp", "jia", "t1d", "ibd", "celiac", "vasc", "sjo", "glom", "care", 
+"par", "smk", "multip", "rur", "quint", "comp", "age", "seas", "bw", "gest", "sex", "del", "bf", "exp_vax")) %>%
+  tbl_summary(by=exp_vax)
+
+df_stats$p
+
+
+
+ 
+  trial %>%
+  select(trt, age, response, grade) %>%
+  tbl_summary(by = trt, missing = "no") %>%
+  add_difference(everything() ~ "smd")
+```
+

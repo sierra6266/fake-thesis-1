@@ -39,7 +39,7 @@ heart$dls
 #Create fake data
 ```{r}
 #create size var
-s =2000
+s =229753
 
 #create id variable
 id = 1:2000
@@ -143,6 +143,58 @@ out_ai = sample(x=c("0", "1"),
       prob = c(.995, .005),
       size=s,
 replace=TRUE)
+
+# itp
+
+itp = sample(x=c("0", "1"),
+      prob = c(.999958, 0.000042),
+      size=s,
+replace=TRUE)
+
+# jia
+
+jia = sample(x=c("0", "1"),
+      prob = c(.999829, 0.000171),
+      size=s,
+replace=TRUE)
+
+# t1d
+t1d = sample(x=c("0", "1"),
+      prob = c(.99985, 0.00015),
+      size=s,
+replace=TRUE)
+
+#ibd
+ibd = sample(x=c("0", "1"),
+      prob = c(.999868, 0.000132),
+      size=s,
+replace=TRUE)
+
+# celiac
+celiac = sample(x=c("0", "1"),
+      prob = c(.999927, 0.000073),
+      size=s,
+replace=TRUE)
+
+# vasc
+vasc = sample(x=c("0", "1"),
+      prob = c(.9995, 0.0005),
+      size=s,
+replace=TRUE)
+
+# sjo
+sjo = sample(x=c("0", "1"),
+      prob = c(.99995, 0.00005),
+      size=s,
+replace=TRUE)
+
+# glom
+glom = sample(x=c("0", "1"),
+      prob = c(.99978, 0.00022),
+      size=s,
+replace=TRUE)
+
+
 
 #maternal age
 #group

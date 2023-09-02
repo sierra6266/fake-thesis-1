@@ -1,0 +1,76 @@
+---
+title: "Untitled"
+author: "Sierra"
+date: "2023-09-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load libs
+```{r, message=FALSE, warning=FALSE}
+library(epiR)
+library(reshape2)
+library(fastDummies)
+library(smd)
+library(lubridate)
+library(survminer)
+library(survival)
+library(adjustedCurves)
+library(jtools)
+library(cobalt)
+library(MatchIt)
+library(WeightIt)
+library(survey)
+library(janitor)
+library(tidyr)
+library(summarytools)
+library(haven)
+library(here)
+library(coxed)
+library(tableone)
+library(tidyverse)
+library(ggplot2)
+library(tidylog)
+library(flextable)
+library(gtsummary)
+```
+## Create date var
+```{r}
+today = Sys.Date()
+
+```
+
+## Add human values to data from dictionary/key
+
+```{r}
+key = read_csv(here("Data", "01-09-23_fakedata-label-key.csv"))
+data = read_csv(here("Data","ind-ai-no-missing_28AUG23.csv")) 
+
+# make key so that each value has its own row
+
+key2 = key %>%
+  separate_rows(old.lvl, new.lvl, sep=",") %>%
+  mutate(old.lvl = as.numeric(old.lvl)) %>%
+  filter(!is.na(old.lvl))
+
+# Apply to data
+dd3 = data %>%
+  pivot_longer(
+    cols=!id,
+    names_to = "old.name",
+    values_to = "old.lvl") %>%
+  left_join(key2, by = c("old.name", "old.lvl")) %>%
+  mutate(new.lvl = ifelse(is.na(new.lvl), old.lvl, new.lvl),
+         new.name = ifelse(is.na(new.name), old.name, new.name)) %>%
+  select(-c(old.lvl, old.name)) %>%
+  group_by(id) %>%
+  pivot_wider (
+    names_from = new.name,
+    values_from = new.lvl) #keep new names and levels
+
+stview(dfSummary(dd3))
+```
+
