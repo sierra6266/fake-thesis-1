@@ -12,6 +12,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ## Load libs
 ```{r, message=FALSE, warning=FALSE}
 library(epiR)
+library(labelled)
 library(data.table)
 library(sjlabelled)
 library(reshape2)
@@ -51,6 +52,8 @@ today = Sys.Date()
 #data_missing <- read_csv(here("Data", "brf-fakedata-missing_17AUG23.csv")) 
 
 data = read_csv(here("Data","ind-ai-no-missing_28AUG23.csv")) 
+
+key = read_csv(here("Data", "01-09-23_fakedata-label-key.csv"))
 
 # make vectors of continuous and categorical vars
 
@@ -366,195 +369,5 @@ This one is not right
 ggsurvplot(survfit(cox_model_iptw), 
            data=data,
            ggtheme = theme_minimal())
-```
-
-## what I want to do:
-
-For each column and row in data:
-match the data$col to key$old.name,
-add key$new.name as the data$col label,
-find the data level value in key$old.lvl,
-apply key$new.lvl (same index in list)
-
-```{r}
-
-
-key$new.lvl[match(data, key$old.lvl) ]
-```
-
-
-```{r}
-for(i in 1:nrow(df)) {
-  df$var5[i] <- df[which(colnames(df)==df$var4[i]), i]
-}
-
-
-df$var5 <- unlist(sapply(seq_along(df), function(x) df[x, match(df$var4[x], names(df))]))
-```
-
-
-
-```{r}
-key = read_csv(here("Data", "01-09-23_fakedata-label-key.csv"))
-
-test = data
-  
-  
-x = for(i in 1:nrow(data)) {
-  mutate(data$new.label = case_when (colnames(data) == key$old.name ~ key$new.name,
-                            TRUE ~ colnames(data)))
-}
-
-
-```
-
-
-
-```{r}
-df2 <- df1 %>% 
-  select(-Variables) %>% 
-  gather(Year, val,`2000`:`2001`) %>% 
-  spread(Varcode, val)
-df2
-
-
-Lbl <- df1 %>% 
-  distinct(Varcode, Variables)
-for (i in seq_len(nrow(Lbl))) {
-  Hmisc::label(df2[[Lbl$Varcode[i]]]) <- Lbl$Variables[i]
-}
-str(df2)
-```
-
-```{r}
-lbl <- key %>%
-  distinct(old.name, new.name)
-
-
-
-
-
-for (i in seq_len(nrow(lbl))) {
-  Hmisc::label(data[[lbl$old.name[i]]]) <- Lbl$Variables[i]
-}
-str(df2)
-lbl
-```
-## trying to make the new.lvls a list so that I can assign them but it's not working
-
-```{r}
-
-
-kf = key %>%
-  select(old.name, new.lvl) %>%
-  mutate(new.lvl = strsplit(new.lvl, ",")) %>%
-  pivot_wider(
-    names_from = old.name,
-    values_from = new.lvl)
-  
-kf2 = as.list(kf)
-
-print(kf2)
-
-
-get.label = Vectorize(
-  function(colnames) {
-    kf2$colnames[[diagnosis.code]]
-  })
-
-
-tst = d2 %>% 
-  mutate(label = get.label(colnames))
-
-
-bf2 = strsplit(kf2$bf," ")
-
-keyflip = key %>%
-  list(strsplit(key$new.lvl, ","))
-
-
-labels <- list("no diagnosis", "depression", "anxiety", "bipolar")
-# This is the function to contain your code for assigning labels
-# based on values in your data set. Replace this with whatever
-# logic you have. In this example, I've assumed that the values
-# we are labeling are all integers we could use to look up labels.
-get.label = Vectorize(
-  function(diagnosis.code) {
-    labels[[diagnosis.code]]
-  })
-
-# Example data.
-ex2 = data.frame(diagnosis.codes = c(1, 3, 2, 2, 1))
-
-# Create a new column "label" by applying your function to the
-# values in another column.
-ex3 = ex2 %>% mutate(label = get.label(diagnosis.codes))
-```
-
-```{r}
-labels_list <- structure(list(Variable = structure(c(1L, 1L, 1L, 2L, 2L, 2L, 
-2L, 3L, 3L, 3L, 3L, 3L, 4L, 4L, 4L, 4L, 4L, 4L), .Label = c("A1", 
-"B1", "C1", "D1"), class = "factor"), Value = c(1L, 2L, 3L, 1L, 
-2L, 3L, 4L, 1L, 2L, 3L, 4L, 5L, 1L, 2L, 3L, 4L, 5L, 6L), Label = structure(c(15L, 
-3L, 18L, 17L, 8L, 12L, 16L, 5L, 1L, 7L, 14L, 13L, 11L, 10L, 9L, 
-2L, 4L, 6L), .Label = c("Atlanta", "Bill", "Blue", "Bob", "Boston", 
-"Brian", "Dallas", "Down", "Jake", "Jim", "John", "Left", "Los_Angeles", 
-"New_York", "Red", "Right", "Up", "Yellow"), class = "factor")), class = "data.frame", row.names = c(NA, 
--18L))
-
-df <- tibble(A1 = rep(1:3,2),
-            B1 = c(1:4, 1, 2),
-            C1 = c(1:5, 1),
-            D1 = 1:6
-            )
-
-
-df %>%
-  gather(key = Variable, value = Value) %>%
-  left_join(labels_list, by = c("Variable", "Value")) %>%
-  select(-Value) %>%
-  group_by(Variable) %>%
-  mutate(row = row_number()) %>%
-  spread(key = Variable, value = Label)
-```
-
-
-## Change data from numbers to words
-```{r}
-# Make key longer so that each old level gets its own row
-
-key2 = key %>%
-  separate_rows(old.lvl, new.lvl, sep=",") %>%
-  mutate(old.lvl = as.numeric(old.lvl)) %>%
-  filter(!is.na(old.lvl))
-
-# inspect 19 rows only in y
-dd3 = data %>%
-  pivot_longer(
-    cols=!id,
-    names_to = "old.name",
-    values_to = "old.lvl") %>%
-  left_join(key2, by = c("old.name", "old.lvl")) %>%
-  mutate(new.lvl = ifelse(is.na(new.lvl), old.lvl, new.lvl),
-         new.name = ifelse(is.na(new.name), old.name, new.name)) %>%
-  select(-c(old.lvl, old.name)) %>%
-  group_by(id) %>%
-  pivot_wider (
-    names_from = new.name,
-    values_from = new.lvl
-  ) #keep new names and levels
-
-stview(dfSummary(dd3))
-```
-# Applying sjlabelled labels works but they are not used by gtsummary or ggplot
-```{r}
-
-library(sjlabelled)
-library(ggeasy)
-
-d5 <- set_labels(data, labels = strsplit(key$new.lvl[match(names(data), key$old.name)], ","))
-
-get_labels(d5)
-
 ```
 

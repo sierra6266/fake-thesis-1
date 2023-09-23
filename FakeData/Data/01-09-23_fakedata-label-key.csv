@@ -27,6 +27,6 @@ exp_flu,2009 A/H1N1 influenza infection during pregnancy,"0,1","No,Yes"
 del,Mode of delivery,"0,1","Cesarean,Vaginal"
 seas,Season of last menstrual period,"1,2,3,4","Spring,Summer,Fall,Winter"
 bf,Exclusive breastfeeding at discharge,"1,2,3","Breastmilk only,Formula only,Combination"
-bw,Birth weight,,
+bw,"Birth weight, g",,
 multip,Multiple birth,"0,1","No,Yes"
 id,,,

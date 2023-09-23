@@ -1,0 +1,808 @@
+---
+title: "abstract work"
+author: "Sierra"
+date: "2023-09-14"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load libs
+```{r, message=FALSE, warning=FALSE}
+library(epiR)
+library(labelled)
+library(table1)
+library(data.table)
+library(sjlabelled)
+library(ggeasy)
+library(reshape2)
+library(fastDummies)
+library(smd)
+library(lubridate)
+library(survminer)
+library(survival)
+library(adjustedCurves)
+library(jtools)
+library(cobalt)
+library(MatchIt)
+library(WeightIt)
+library(survey)
+library(janitor)
+library(tidyr)
+library(summarytools)
+library(haven)
+library(here)
+library(coxed)
+library(tableone)
+library(tidyverse)
+library(ggplot2)
+library(tidylog)
+library(flextable)
+library(gtsummary)
+```
+## Create date var
+```{r}
+today = Sys.Date()
+
+```
+
+
+## Load data
+```{r}
+#data_missing <- read_csv(here("Data", "brf-fakedata-missing_17AUG23.csv")) 
+
+data = read_csv(here("Data","ind-ai-no-missing_28AUG23.csv")) 
+
+key = read_csv(here("Data", "01-09-23_fakedata-label-key.csv"))
+
+# make vectors of continuous and categorical vars
+
+cat = c("id", "sex", "phu", "ster", "out_ai", "comorb", "matai", "care", 
+"par", "smk", "del", "multip", "rur", "quint", "exp_vax", "comp", 
+"exp_flu", "bf", "seas", "gest", "itp", "jia", "t1d", "ibd", "celiac", "vasc", "sjo", "glom")
+
+con = c("age", "futime","bw")
+
+bin = c("sex", "ster", "out_ai", "comorb", "matai", "del", "rur", "exp_vax", "comp", 
+"exp_flu", "itp", "jia", "t1d", "ibd", "celiac", "vasc", "sjo", "glom")
+
+covs = c("phu", "ster", "comorb", "matai", "care", "par", "smk", "multip", "rur", "quint", "comp", "age", "seas", "bw", "gest", "sex", "del", "bf")
+
+
+
+dat = head(data, 300)
+
+stview(dfSummary(d2))
+
+
+d2 = data[sample(nrow(data), 300), ]
+
+write.csv(d2, "D:/DocumentsHDD/uOttawa/Thesis/R coding/fake-thesis/FakeData/Data/data-stub.csv", row.names=FALSE)
+
+str(data)
+
+str(d2)
+```
+
+
+
+## Labelling data with labelled package following this tutorial https://www.pipinghotdata.com/posts/2022-09-13-the-case-for-variable-labels-in-r/
+```{r}
+# make frame of just old names and new names
+meta = key %>%
+  select(old.name, new.name) %>%
+  filter(old.name != "preterm") # key cannot have variables that data does not have
+
+
+# create a named vector with deframe
+labels = meta %>%
+  deframe()
+
+# Assign labels using splice operator so that they are matched and order doesn't matter
+# "Splicing causes each name of the list to become an argument name."
+data.lab = data %>%
+  set_variable_labels(!!!labels)
+
+```
+
+
+# Create data dictionary automatically
+```{r}
+dict = data.lab %>%
+  generate_dictionary()
+```
+
+# explore data
+```{r}
+stview(dfSummary(data.lab))
+```
+
+
+```{r}
+table(data.lab$sex, data.lab$exp_vax)
+
+with(data.lab, ctable(sex, exp_vax))
+
+str(data.lab)
+
+data.lab %>%
+  tabyl(sex, exp_vax)
+
+%>%
+  purrr::imap(.f = ~tabyl(dat = humans, !!sym(.y), gender) %>%
+                     adorn_percentages("row") %>%
+                     adorn_pct_formatting(digits = 2) %>%
+                     adorn_ns())
+
+
+data %>%
+  select(age, par, smk, comorb, matai, comp, multip, quint, rur, gest, sex, exp_vax) %>%
+  purrr::imap(.f = ~janitor::tabyl(dat = data, !!sym(.y), exp_vax) %>% # !! unquotes, sym is symbol
+                adorn_percentages("col") %>%
+                adorn_pct_formatting(digits = 2) %>%
+                adorn_ns())
+```
+
+```{r}
+humans <- starwars %>%
+    filter(species == "Human")
+
+str(humans)
+
+t2 <- humans %>%
+    tabyl(gender, eye_color)
+
+t2 %>%
+  adorn_percentages("row") %>%
+  adorn_pct_formatting(digits = 2) %>%
+  adorn_ns()
+
+humans %>%
+  select(where(is.character)) %>%
+  select(-name, -gender) %>%
+  purrr::imap(.f = ~tabyl(dat = humans, !!sym(.y), gender) %>%
+                     adorn_percentages("row") %>%
+                     adorn_pct_formatting(digits = 2) %>%
+                     adorn_ns())
+```
+
+```{r}
+t3 <- head(data)
+  
+  
+t3 = t3 %>%
+  select(age, par, smk, comorb, matai, comp, multip, quint, rur, gest, sex, exp_vax) %>%
+  mutate(exp_vax = factor(exp_vax)) %>%
+    tabyl(par, exp_vax)
+
+t3 %>%
+  adorn_percentages("col") %>%
+  adorn_pct_formatting(digits = 2) %>%
+  adorn_ns()
+
+data %>%
+  select(age, par, smk, comorb, matai, comp, multip, quint, rur, gest, sex, exp_vax) %>%
+  mutate(exp_vax = factor(exp_vax)) %>%
+  purrr::imap(.f = ~tabyl(dat = data, !!sym(.y), exp_vax) %>%
+                     adorn_percentages("row") %>%
+                     adorn_pct_formatting(digits = 2) %>%
+                     adorn_ns())
+
+
+str(data)
+
+class(data) <- c("tbl_df", "tbl", "data.frame")
+```
+
+
+
+
+# raw table 1
+```{r}
+t1 = data.lab %>%
+  select(age, par, smk, comorb, matai, comp, multip, quint, rur, gest, sex, exp_vax) %>%
+  tbl_summary(by=exp_vax,
+              type = all_dichotomous() ~ "categorical") %>%
+  add_overall() 
+
+# add level names to data
+
+show_header_names(t1)
+
+# make it look better
+t1 = t1 %>%
+  modify_header(
+  label = '**Characteristic**',
+  stat_0 = '**Whole population** (unweighted) N = 229,753',
+  stat_1 = '**No**, N = 122,679',
+   stat_2 = '**Yes**, N = 107,074' ) %>%
+  modify_spanning_header(
+    c(stat_1, stat_2) ~ 
+      "**2009 A/H1N1 influenza vaccination during pregnancy (unweighted)**")
+
+t1
+
+# %>%  as_flex_table()
+
+"Distribution of baseline study population, overall and by 2009 A/H1N1 influenza vaccination status"
+
+
+t1$meta_data$df_stats
+```
+
+# Hilcode 
+### Take the proportions from gtsummary and calculate categorical smds for them
+```{r}
+meta_tbl = t1$meta_data %>% # grab the meta data
+  unnest()
+
+tst = t1$meta_data$df_stats[[2]]
+
+m2 = meta_tbl %>%
+  left_join(tbl, by=c("variable", "label")) # join smds to meta data
+
+m3 = m2 %>%
+  select(var_label, by, label, median, p25, p75, N_obs, n, N, p, col_name) %>%
+   pivot_wider(names_from = col_name, values_from = p, names_prefix="p_") %>% #make cols of p_1 and p_0
+  mutate(cat_smd2=abs((p_stat_2-p_stat_1)/(sqrt(((p_stat_2*(1-p_stat_2)+p_stat_1*(1-p_stat_1)))/2)))) # calculate SMD
+
+# totally works
+tbl = t1$meta_data %>% # grab the meta data
+  unnest() %>% # put the lists into one df
+  filter(summary_type == "categorical" & !is.na(by)) %>% # get rid of the continuous vars and overall proportions
+  select(variable, label, by, p) %>% 
+  pivot_wider(names_from = by, values_from = p, names_prefix="p_") %>% #make cols of p_1 and p_0
+  mutate(cat_smd=abs((p_1-p_0)/(sqrt(((p_1*(1-p_1)+p_0*(1-p_0)))/2)))) # calculate SMD
+
+t1
+
+# 
+m4 = t1$meta_data %>% # grab the meta data
+  unnest() %>% # put the lists into one df
+  select(variable, label, by, p, n, N, median, p25, p75) %>% 
+  pivot_wider(names_from = by, values_from = c(n, N, median, p25, p75, p)) %>% #make cols of p_1 and p_0
+  mutate(cat_smd=abs((p_1-p_0)/(sqrt(((p_1*(1-p_1)+p_0*(1-p_0)))/2)))) # calculate SMD
+
+#summarize option, stopped early
+
+# either widen the data frame so that each level of the cat variables are columns, or
+# pivot longer to have a column called var name/characteristic and a column called level ( multiple rows of each var) 
+# group by both exp_vax and characteristic variable
+
+data.lab %>%
+  select(age, par, smk, comorb, matai, comp, multip, quint, rur, gest, sex, exp_vax) %>%
+  group_by(exp_vax) %>%
+  summarize(across(everything(), list(n=length, mean=mean)))
+
+t1
+
+# make summary table a tibble
+t1.tbl = as_tibble(t1)
+
+# join key to tbl to get new names with the data
+name.tbl = tbl %>%
+  left_join(key, by = c("variable" = "old.name"))
+
+# join tbl with summary based on new.name
+name.tbl %>%
+  select (new.name, label, cat_smd) %>%
+  full_join(key, by = c("new.name" = "variable", ))
+
+```
+
+```{r}
+tst = t1$meta_data$df_stats[[2]]
+
+tst %>%
+  filter(!is.na(by)) %>%
+  group_by(variable_levels) %>%
+  
+
+```
+
+
+
+# SMDs for continuous
+/* continuous variables */ 
+ 
+*** step 1: compute the coefficients of weighted variance; 
+data data1_weights2; 
+	set &data.; 
+	iptw_2=&iptw.**2; 
+run; 
+ 
+proc means data=data1_weights2 noprint; 
+	class &exposure.; 
+	var &iptw.; 
+	output out=out_w sum(&iptw.)=sum_w sum(iptw_2)=sum_w2; 
+run; 
+ 
+/* for each continuous variable */ 
+*** step 2: specify vardef=weight; 
+proc means data=&data. vardef=weight noprint; 
+	class &exposure.; 
+	var &continuous.; 
+	weight &iptw.; 
+	output out=out_mean_var mean=mean var=var; 
+run; 
+ 
+*** step 3: compute the unbiased weighted variance; 
+data w_var0 w_var1; 
+	merge out_mean_var out_w(keep=&exposure. sum_w sum_w2); 
+	by &exposure.; 
+ 
+	w_var=((sum_w**2)/((sum_w**2)-sum_w2))*var; 
+ 
+	if &exposure.=0 then output w_var0; 
+	if &exposure.=1 then output w_var1; 
+run; 
+ 
+*rename variables for standardized difference calculations; 
+proc sql; 
+	create table temp as 
+	select a.mean as m1, a.w_var as v1, b.mean as m2, b.w_var as v2 
+	from w_var1 as a, 
+	w_var0 as b; 
+quit; 
+ 
+*compute standardized mean difference using unbiased weighted variance; 
+data num_var_std_diff&suffix.; 
+	retain variable m1 v1 m2 v2 std_diff; 
+	set temp; 
+ 
+	std_diff=abs((m1-m2)/(sqrt((v1+v2)/2))); 
+	variable="&continuous"; 
+ 
+	label m1='Mean for exposed group' 
+		  v1='Weighted variance for exposed group' 
+		  m2='Mean for unexposed group' 
+		  v2='Weighted variance for unexposed group'; 
+run; 
+ 
+/* categorical variables */ 
+ 
+data cat_var_std_diff&suffix.; 
+	length variable $30 levels $10 p_0 8 p_1 8 std_diff 8; 
+	stop; 
+run; 
+ 
+```{r}
+
+```
+
+
+
+
+
+
+
+
+# trying to make a reprex for stack overflow question
+```{r}
+t1$meta_data$stat_display
+
+x = head(data.lab, 30)
+
+age = x$age
+
+care = x$care
+
+sex = x$sex
+
+exp = x$exp_vax
+
+id = c(1:30)
+
+age
+
+paste(exp, collapse = ', ')
+
+tabyl(care)
+
+
+df = data.frame(age, sex, care, exp)
+
+
+tbl = df %>%
+  tbl_summary(by=exp,
+              type = all_dichotomous() ~ "categorical") %>%
+  add_overall() 
+
+tbl
+```
+
+
+
+
+
+
+```{r}
+tab = table1(~ age+ factor(par)+ factor(smk)+ factor(comorb)+factor(matai)+ factor(comp)+ factor(multip)+ factor(quint)+ factor(rur)+ factor(gest)+ factor(sex)|  exp_vax , data=data.lab )
+```
+
+
+## Create propensity score model with log reg
+
+From SAS code:
+
+%let ps_vars=mom_ageD conc_season mult_birth obcomp2 obcomp3 obcomp7 pe abrup 
+			 m_asthma m_diabetes m_heart m_hyper mathp12 mathp13 mathp14 mathp17 mathp18 mathp19 mathp20 mathp21 
+			 mathp22 mathp23 mathp24 mathp25 mathp26 mathp27 steroids m_rural phu_region parity_cat m_incquint antenatal smoking_cat;
+			 
+```{r}
+# model specification for maternal vaccination
+# variables are the same ones from the SAS code plus maternal ai
+
+# 1. estimate ps using glm
+fit.ps = glm(exp_vax ~ age + factor(seas) + factor(multip) + factor(comp) + factor(comorb) + factor(ster) + factor(rur) + factor(phu) + factor(par) + factor(quint) + factor(care) + factor(smk) + factor(matai),
+             data=data.lab, family=binomial) 
+
+# get the predicted values  
+data.lab$ps = predict(fit.ps, type="response")
+
+# apply the summary function to the two exposure groups
+tapply(data.lab$ps, data.lab$exp_vax, summary)
+
+# what am I looking to see here?
+```
+# Assess the overlap of the distributions
+by plotting them!
+
+```{r}
+
+# plots totally overlap? Maybe something went wrong.
+data.lab %>%
+  mutate(exp_vax = as.factor(exp_vax)) %>%
+  ggplot(aes(x=ps, group=exp_vax, color= exp_vax)) +
+  geom_density() +
+  ggtitle("Propensity Scores") +
+  theme_light()
+
+```
+
+## Compute the weights
+
+Stabilize = T
+
+Mean of stabilized weights is ~ 1
+```{r}
+weight.res = weightit(exp_vax ~ age + factor(seas) + factor(multip) + factor(comp) + factor(comorb) + factor(ster) + factor(rur) + factor(phu) + factor(par) + factor(quint) + factor(care) + factor(smk) + factor(matai),
+                   data = data.lab, 
+                   estimand = "ATE",
+                   stabilize = T,
+                   method = "ps")
+
+summary(weight.res$weights)
+```
+
+
+## Check balance in weighted pseudo-population
+with SMD tables and love plots
+Cobalt pulls out balanced statistics and flags which ones are above the level we specify (here, 0.10)
+
+```{r}
+bal.tab(weight.res, un = T, thresholds = c(m = .1))
+# all of them are balanced now!
+
+love.plot(weight.res)
+#ggsave("loveplot.png")
+```
+
+## Get SMDs so I can put them in a table
+```{r}
+d2 = data.lab %>%
+  mutate(across(all_of(cat), as.factor))
+
+c2 = subset(d2, select = covs)
+  
+
+b = bal.tab(exp_vax ~ c2, data=data.lab,
+        weights = weight.res$weights,
+        estimand="ATE",
+        disp = c("means"), un = TRUE,
+        stats = c("mean.diffs")) 
+
+# Make the balance results a df
+b1=b$Balance
+
+# create a column with the rownames
+b1$names <- rownames(b1)
+
+# next, figure out how to stick it into t1 so that the right names align
+
+```
+
+
+## survey package must be used to make weighted table one (but actually I think I don't want a weighted table)
+
+```{r}
+# make binary vars factors
+fct_data = data.lab %>%
+  mutate(across(all_of(cat), as.factor))
+
+# convert df to survey object
+svy_data <-  survey::svydesign(
+    id = ~id,
+    weights = ~weight.res$weights,
+    data = fct_data)
+
+
+# only the vars included in the ps plus matai
+tbl1_wght = svy_data %>%
+  tbl_svysummary(
+    by = exp_vax,
+    include = c("phu", "ster", "comorb", "matai", "care", 
+"par", "smk", "multip", "rur", "quint", "comp", "age", "seas")) %>%
+  add_difference(everything() ~ "smd") %>%
+  as_flex_table() 
+
+
+
+tbl1_wght # only gives overall diffs
+
+#tbl1_wght %>%
+ # save_as_docx(path = here("Output", paste0(today,"_tbl1-weighted.docx")))
+```
+
+
+## Adjusted survival curves from adjustedCurves package
+```{r}
+
+# outcome must be numeric or logical but exposure must be factor
+d2 = data %>%
+  mutate(exp_vax = as.factor(exp_vax))
+
+# create log model
+
+glm_mod = glm(exp_vax ~ age + factor(seas) + factor(multip) + factor(comp) + factor(comorb) + factor(ster) + factor(rur) + factor(phu) + factor(par) + factor(quint) + factor(care) + factor(smk) + factor(matai) +factor(itp)+factor(jia)+factor(t1d)+factor(ibd)+factor(celiac)+factor(vasc)+factor(sjo)+factor(glom),
+                   data = d2, 
+                   family = "binomial" (link="logit"))
+
+# calc adjusted survival curves and plot them
+
+adjsurv = adjustedsurv(data=d2, 
+                       variable = "exp_vax",
+                       ev_time = "futime",
+                       event = "out_ai",
+                       method = "iptw_cox",
+                       treatment_model=glm_mod,
+                       conf_int = T)
+
+plot(adjsurv)
+```
+
+
+
+## Cox PH
+```{r}
+# crude Cox PH model
+cox_model_crude <- coxph(Surv(futime, out_ai) ~ exp_vax, 
+                         data = data)
+# get HR estimates
+cox_fit_crude  <- cox_model_crude %>% 
+  broom::tidy(., conf.int = T, exponentiate = T)
+
+#summary 
+summary(cox_model_crude)
+
+# IPTW Cox PH model
+cox_model_iptw <- coxph(Surv(futime, out_ai) ~ exp_vax, 
+                        data = data, 
+                        weights = weights$weights)
+# get HR estimates
+cox_fit_iptw  <- cox_model_iptw %>% 
+  broom::tidy(., conf.int = T, exponentiate = T)
+
+#summary
+
+summary(cox_model_iptw)
+
+# Put HRs into a table
+cox_fit_crude %>% bind_rows(cox_fit_iptw)
+
+```
+## Another surival plot
+
+This one is not right
+```{r}
+ggsurvplot(survfit(cox_model_iptw), 
+           data=data,
+           ggtheme = theme_minimal())
+```
+
+
+# trying to combine cobalt and gtsummary into one table
+```{r}
+# categorical: std_diff=abs((p_1-p_0)/(sqrt(((p_1*(1-p_1)+p_0*(1-p_0))))/2))
+
+tbl_regression_ex <-
+  lm(age ~ grade + marker, trial) %>%
+  tbl_regression() %>%
+  bold_p(t = 0.5)
+
+tbl_regression_ex
+
+tbl_summary_ex <-
+  trial %>%
+  select(trt, age, grade, response) %>%
+  tbl_summary(by = trt)
+
+tbl_summary_ex
+
+tbl_regression_ex %>%
+  purrr::pluck("table_body")
+
+tbl_summary_ex %>%
+  purrr::pluck("table_body")
+
+# can I make a table with my results, add a column for variable, add a col for label, and join on them by matching both?
+
+body = t1 %>%
+  purrr::pluck("table_body") %>%
+  rename(stat_overall = stat_0,
+         stat_no = stat_1,
+         stat_yes = stat_2)
+
+t1
+
+b
+  
+```
+# trying to combine gtsummary and cobalt SMDs into one table
+```{r}
+
+## Get SMDs so I can put them in a table
+
+d2 = data.lab %>%
+  mutate(across(all_of(cat), as.factor))
+
+c2 = subset(d2, select = covs)
+  
+
+b = bal.tab(exp_vax ~ c2, data=data.lab,
+        weights = weight.res$weights,
+        estimand="ATE",
+        disp = c("means"), un = TRUE,
+        stats = c("mean.diffs")) 
+
+# Make the balance results a df
+b1 = b$Balance 
+
+# create a column with the rownames
+b1$names <- rownames(b1)
+
+# create var and label columns for joining
+b2 = b1 %>%
+  select (names, Diff.Un, Diff.Adj) %>%
+  mutate(var = sub("_.*", "", names),
+         label = sub(".*_", "", names))
+
+
+# join with summary body
+
+left_join(body,
+          b2,
+          by = variable)
+
+
+# matches on label and var, so binary variables are out
+body %>%
+  rename(var = variable) %>%
+  left_join(b2)
+
+
+
+
+library(unglue)
+body %>%
+  mutate(pct_no = unglue::unglue_vec(stat_no, 
+  "{}( {x} %{}"))
+
+
+body %>%
+  mutate(pct_no = gsub(".*[(] ([^.]+) [%].*", "\\1", stat_no))
+
+library(qdap)
+
+body %>%
+  mutate(n_no =  bracketX(stat_no))
+```
+
+
+```{r}
+gtsummary::trial %>%
+  select(response, age, marker) %>%
+  tbl_uvregression(
+    y = response,
+    method = glm,
+    method.args = list(family = binomial),
+    exponentiate = TRUE,
+    hide_n = TRUE)
+
+
+
+ tbl_custom_summary(
+    include = c("Age", "Class"),
+    by = "Sex",
+    stat_fns = ~ proportion_summary("Survived", "Yes", weights = "Freq"),
+    statistic = ~"{prop}% ({n}/{N}) [{conf.low}-{conf.high}]",
+    digits = ~ list(
+      function(x) {
+        style_percent(x, digits = 1)
+      },
+      0, 0, style_percent, style_percent
+    ),
+    overall_row = TRUE,
+    overall_row_last = TRUE
+  ) %>%
+  bold_labels() %>%
+  modify_footnote(
+    update = all_stat_cols() ~ "Proportion (%) of survivors (n/N) [95% CI]"
+  )
+```
+
+
+```{r}
+# get percent alone 
+
+body %>%
+   mutate(pct_no = stringr::str_extract(string = stat_no,
+                                               pattern = "(?<=\\().*(?=\\))"),
+          pct_yes = stringr::str_extract(string = stat_yes,
+                                               pattern = "(?<=\\().*(?=\\))"))
+
+
+
+v=-10
+
+y = abs(v)
+
+
+p_1 = runif(100, 0, 1)
+p_0 = runif(100, 0 ,1)
+
+std_diff=abs(
+  (p_1-p_0)/
+    (sqrt(((p_1*(1-p_1)
+            +p_0*(1-p_0))))/2))
+
+
+tbl
+```
+
+```{r}
+# create data
+library(tidyverse)
+library(gtsummary)
+
+age = c(34, 26, 42, 39, 17, 32, 28, 35, 42, 42, 44, 21, 26, 19, 34, 38, 20, 23, 33, 39, 28, 30, 19, 30, 37, 22, 32, 26, 18, 26)
+
+care = c(4, 2, 4, 4, 5, 4, 4, 4, 4, 4, 4, 2, 4, 4, 4, 4, 4, 4, 5, 4, 4, 4, 4, 4, 2, 2, 4, 4, 4, 4)
+
+sex = c(1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 0, 1, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1)
+
+exp = c(1, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0)
+
+df = data.frame( age, sex, care, exp)
+
+# create table summary
+tbl = df %>%
+  tbl_summary(by=exp,
+              type = all_dichotomous() ~ "categorical") %>%
+  add_overall() 
+
+tbl
+
+# categorical SMD calculation, where p_1 is the proportion in exp group 1 and p_0 is the proportion in exp group 0 (the "by" variable). 
+
+cat_smd=abs((p_1-p_0)/(sqrt(((p_1*(1-p_1)+p_0*(1-p_0))))/2))
+
+library(reprex)
+reprex()
+
+p_1 = 0.5
+p_0=0.31
+```
+

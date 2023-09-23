@@ -1,0 +1,16 @@
+---
+title: "Untitled"
+author: "Sierra"
+date: "2023-09-13"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## New idea: create data with all var names from appendix. Use BRFSS as a starting point. 
+
+For outcomes, create data using proportions in the sheet. Then, calculate a weight depending on maternal flu or vax in preg that makes the ai outcomes more likely if flu=1. Apply this to the outcome value and make it so that if the number is over 0.5 it becomes 1, otherwise no. 
+
+This is to create data that is not totally balanced between the exposures. 

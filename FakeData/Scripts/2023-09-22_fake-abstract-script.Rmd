@@ -1,0 +1,510 @@
+---
+title: "abstract work"
+author: "Sierra"
+date: "2023-09-14"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load libs
+```{r, message=FALSE, warning=FALSE}
+library(epiR)
+library(labelled)
+library(table1)
+library(data.table)
+library(sjlabelled)
+library(ggeasy)
+library(reshape2)
+library(fastDummies)
+library(smd)
+library(lubridate)
+library(survminer)
+library(survival)
+library(adjustedCurves)
+library(jtools)
+library(cobalt)
+library(MatchIt)
+library(WeightIt)
+library(survey)
+library(janitor)
+library(tidyr)
+library(summarytools)
+library(haven)
+library(here)
+library(coxed)
+library(tableone)
+library(tidyverse)
+library(ggplot2)
+library(tidylog)
+library(flextable)
+library(gtsummary)
+```
+## Create date var
+```{r}
+today = Sys.Date()
+
+```
+
+
+## Load data
+```{r}
+#data_missing <- read_csv(here("Data", "brf-fakedata-missing_17AUG23.csv")) 
+
+data = read_csv(here("Data","ind-ai-no-missing_28AUG23.csv")) 
+
+key = read_csv(here("Data", "01-09-23_fakedata-label-key.csv"))
+
+# make vectors of continuous and categorical vars
+
+cat = c("id", "sex", "phu", "ster", "out_ai", "comorb", "matai", "care", 
+"par", "smk", "del", "multip", "rur", "quint", "exp_vax", "comp", 
+"exp_flu", "bf", "seas", "gest", "itp", "jia", "t1d", "ibd", "celiac", "vasc", "sjo", "glom")
+
+con = c("age", "futime","bw")
+
+bin = c("sex", "ster", "out_ai", "comorb", "matai", "del", "rur", "exp_vax", "comp", 
+"exp_flu", "itp", "jia", "t1d", "ibd", "celiac", "vasc", "sjo", "glom")
+
+covs = c("phu", "ster", "comorb", "matai", "care", "par", "smk", "multip", "rur", "quint", "comp", "age", "seas", "bw", "gest", "sex", "del", "bf")
+
+ai = c("itp", "jia", "t1d", "ibd", "celiac", "vasc", "sjo", "glom")
+```
+
+
+
+## Labelling data with labelled package following this tutorial https://www.pipinghotdata.com/posts/2022-09-13-the-case-for-variable-labels-in-r/
+```{r}
+# make frame of just old names and new names
+meta = key %>%
+  select(old.name, new.name) %>%
+  filter(old.name != "preterm") # key cannot have variables that data does not have
+
+
+# create a named vector with deframe
+labels = meta %>%
+  deframe()
+
+# Assign labels using splice operator so that they are matched and order doesn't matter
+# "Splicing causes each name of the list to become an argument name."
+data.lab = data %>%
+  set_variable_labels(!!!labels)
+
+```
+
+
+# Create data dictionary automatically
+```{r}
+dict = data.lab %>%
+  generate_dictionary()
+```
+
+# explore data
+### Note total number of moms and babies, data structure, percent missing, labels of missing values.
+```{r}
+str(data.lab)
+
+stview(dfSummary(data.lab))
+```
+
+# raw table 1
+```{r}
+t1 = data.lab %>%
+  select(age, par, smk, comorb, matai, comp, multip, quint, rur, gest, sex, exp_vax) %>%
+  tbl_summary(by=exp_vax,
+              type = all_dichotomous() ~ "categorical") %>%
+  add_overall() 
+
+# add level names to data
+
+show_header_names(t1)
+
+# make it look better
+t1 = t1 %>%
+  modify_header(
+  label = '**Characteristic**',
+  stat_0 = '**Whole population** (unweighted) N = 229,753',
+  stat_1 = '**No**, N = 122,679',
+   stat_2 = '**Yes**, N = 107,074' ) %>%
+  modify_spanning_header(
+    c(stat_1, stat_2) ~ 
+      "**2009 A/H1N1 influenza vaccination during pregnancy (unweighted)**")
+
+t1
+
+# %>%  as_flex_table()
+
+"Distribution of baseline study population, overall and by 2009 A/H1N1 influenza vaccination status"
+
+
+t1$meta_data$df_stats
+```
+
+# Remove those with missing exp_vax. Note how many are lost. 
+### Compare summary to initial summary.
+```{r}
+data.vax = data.lab %>%
+  filter(!is.na(exp_vax)) #remove missing exposures
+
+stview(dfSummary(data.vax))
+```
+
+# Remove those with any missing PS covariates. Note how many are lost. 
+### Compare summary to previous two summaries.
+```{r}
+data.vax.nm = data.vax %>%
+  drop_na(covs) #remove missing PS covariates
+
+stview(dfSummary(data.vax.nm))
+```
+
+# raw table 1
+```{r}
+t1a = data.vax.nm %>%
+  select(age, par, smk, comorb, matai, comp, multip, quint, rur, gest, sex, exp_vax) %>%
+  tbl_summary(by=exp_vax,
+              type = all_dichotomous() ~ "categorical") %>%
+  add_overall() 
+
+# add level names to data
+
+show_header_names(t1a)
+
+# make it look better
+t1a = t1a %>%
+  modify_header(
+  label = '**Characteristic**',
+  stat_0 = '**Whole population** (unweighted) N = 229,753',
+  stat_1 = '**No**, N = 122,679',
+   stat_2 = '**Yes**, N = 107,074' ) %>%
+  modify_spanning_header(
+    c(stat_1, stat_2) ~ 
+      "**2009 A/H1N1 influenza vaccination during pregnancy (unweighted)**")
+
+t1a
+```
+
+ 
+### Take the proportions from gtsummary and calculate categorical smds for them
+```{r}
+meta_tbl = t1a$meta_data %>% # grab the meta data to have
+  unnest()
+
+# make smds in the table info
+tbl.bal = t1a$meta_data %>% # grab the meta data
+  unnest() %>% # put the lists into one df
+  select(variable, label, by, p, n, N, median, p25, p75) %>% #will I have any continuous vars?
+  pivot_wider(names_from = by, values_from = c(n, N, median, p25, p75, p)) %>% #make cols of p_1 and p_0
+  mutate(cat_smd=abs((p_1-p_0)/(sqrt(((p_1*(1-p_1)+p_0*(1-p_0)))/2)))) # calculate SMD
+
+
+
+# just the proportions and SMDs
+tbl = t1a$meta_data %>% # grab the meta data
+  unnest() %>% # put the lists into one df
+  filter(summary_type == "categorical" & !is.na(by)) %>% # get rid of the continuous vars and overall proportions
+  select(variable, label, by, p) %>% 
+  pivot_wider(names_from = by, values_from = p, names_prefix="p_") %>% #make cols of p_1 and p_0
+  mutate(cat_smd=abs((p_1-p_0)/(sqrt(((p_1*(1-p_1)+p_0*(1-p_0)))/2)))) # calculate SMD
+
+```
+
+
+
+# SAS code
+## SMDs for continuous
+/* continuous variables */ 
+ 
+*** step 1: compute the coefficients of weighted variance; 
+data data1_weights2; 
+	set &data.; 
+	iptw_2=&iptw.**2; 
+run; 
+ 
+proc means data=data1_weights2 noprint; 
+	class &exposure.; 
+	var &iptw.; 
+	output out=out_w sum(&iptw.)=sum_w sum(iptw_2)=sum_w2; 
+run; 
+ 
+/* for each continuous variable */ 
+*** step 2: specify vardef=weight; 
+proc means data=&data. vardef=weight noprint; 
+	class &exposure.; 
+	var &continuous.; 
+	weight &iptw.; 
+	output out=out_mean_var mean=mean var=var; 
+run; 
+ 
+*** step 3: compute the unbiased weighted variance; 
+data w_var0 w_var1; 
+	merge out_mean_var out_w(keep=&exposure. sum_w sum_w2); 
+	by &exposure.; 
+ 
+	w_var=((sum_w**2)/((sum_w**2)-sum_w2))*var; 
+ 
+	if &exposure.=0 then output w_var0; 
+	if &exposure.=1 then output w_var1; 
+run; 
+ 
+*rename variables for standardized difference calculations; 
+proc sql; 
+	create table temp as 
+	select a.mean as m1, a.w_var as v1, b.mean as m2, b.w_var as v2 
+	from w_var1 as a, 
+	w_var0 as b; 
+quit; 
+ 
+*compute standardized mean difference using unbiased weighted variance; 
+data num_var_std_diff&suffix.; 
+	retain variable m1 v1 m2 v2 std_diff; 
+	set temp; 
+ 
+	std_diff=abs((m1-m2)/(sqrt((v1+v2)/2))); 
+	variable="&continuous"; 
+ 
+	label m1='Mean for exposed group' 
+		  v1='Weighted variance for exposed group' 
+		  m2='Mean for unexposed group' 
+		  v2='Weighted variance for unexposed group'; 
+run; 
+ 
+/* categorical variables */ 
+ 
+data cat_var_std_diff&suffix.; 
+	length variable $30 levels $10 p_0 8 p_1 8 std_diff 8; 
+	stop; 
+run; 
+ 
+```{r}
+
+```
+
+
+
+## Create propensity score model with log reg
+
+From SAS code:
+
+%let ps_vars=mom_ageD conc_season mult_birth obcomp2 obcomp3 obcomp7 pe abrup 
+			 m_asthma m_diabetes m_heart m_hyper mathp12 mathp13 mathp14 mathp17 mathp18 mathp19 mathp20 mathp21 
+			 mathp22 mathp23 mathp24 mathp25 mathp26 mathp27 steroids m_rural phu_region parity_cat m_incquint antenatal smoking_cat;
+			 
+```{r}
+# model specification for maternal vaccination
+# variables are the same ones from the SAS code plus maternal ai
+
+# 1. estimate ps using glm
+fit.ps = glm(exp_vax ~ age + factor(seas) + factor(multip) + factor(comp) + factor(comorb) + factor(ster) + factor(rur) + factor(phu) + factor(par) + factor(quint) + factor(care) + factor(smk) + factor(matai),
+             data=data.vax.nm, family=binomial) 
+
+# get the predicted values  
+data.vax.nm$ps = predict(fit.ps, type="response")
+
+# apply the summary function to the two exposure groups
+tapply(data.vax.nm$ps, data.vax.nm$exp_vax, summary)
+
+# what am I looking to see here?
+```
+
+# Assess the overlap of the distributions
+by plotting them!
+
+```{r}
+
+# plots totally overlap? Maybe something went wrong.
+data.vax.nm %>%
+  mutate(exp_vax = as.factor(exp_vax)) %>%
+  ggplot(aes(x=ps, group=exp_vax, color= exp_vax)) +
+  geom_density() +
+  ggtitle("Propensity Scores") +
+  theme_light()
+
+```
+
+## Compute the weights
+
+Stabilize = T
+
+Mean of stabilized weights is ~ 1
+```{r}
+weight.res = weightit(exp_vax ~ age + factor(seas) + factor(multip) + factor(comp) + factor(comorb) + factor(ster) + factor(rur) + factor(phu) + factor(par) + factor(quint) + factor(care) + factor(smk) + factor(matai),
+                   data = data.vax.nm, 
+                   estimand = "ATE",
+                   stabilize = T,
+                   method = "ps")
+
+summary(weight.res$weights)
+```
+
+
+## Check balance in weighted pseudo-population
+with SMD tables and love plots
+Cobalt pulls out balanced statistics and flags which ones are above the level we specify (here, 0.10)
+
+```{r}
+bal.tab(weight.res, un = T, thresholds = c(m = .1))
+# all of them are balanced now!
+
+love.plot(weight.res)
+#ggsave("loveplot.png")
+```
+
+
+## Get SMDs so I can put them in a table
+```{r}
+d2 = data.vax.nm %>%
+  mutate(across(all_of(cat), as.factor))
+
+c2 = subset(d2, select = covs)
+  
+
+b = bal.tab(exp_vax ~ c2, data=data.vax.nm,
+        weights = weight.res$weights,
+        estimand="ATE",
+        disp = c("means"), un = TRUE,
+        stats = c("mean.diffs")) 
+
+# Make the balance results a df
+b1=b$Balance
+
+# create a column with the rownames
+b1$names <- rownames(b1)
+
+# next, figure out how to stick it into t1 so that the right names align
+
+```
+
+
+## survey package must be used to make weighted table one (but actually I think I don't want a weighted table?)
+
+```{r}
+# make binary vars factors
+fct_data = data.vax.nm %>%
+  mutate(across(all_of(cat), as.factor))
+
+# convert df to survey object
+svy_data <-  survey::svydesign(
+    id = ~id,
+    weights = ~weight.res$weights,
+    data = fct_data)
+
+
+# only the vars included in the ps plus matai
+tbl1_wght = svy_data %>%
+  tbl_svysummary(
+    by = exp_vax,
+    include = c("phu", "ster", "comorb", "matai", "care", 
+"par", "smk", "multip", "rur", "quint", "comp", "age", "seas")) %>%
+  add_difference(everything() ~ "smd") %>%
+  as_flex_table() 
+
+
+
+tbl1_wght # only gives overall diffs
+
+#tbl1_wght %>%
+ # save_as_docx(path = here("Output", paste0(today,"_tbl1-weighted.docx")))
+```
+
+
+## Adjusted survival curves from adjustedCurves package
+```{r}
+
+# outcome must be numeric or logical but exposure must be factor
+curve = data.vax.nm %>%
+  mutate(exp_vax = as.factor(exp_vax))
+
+# create log model
+
+glm_mod = glm(exp_vax ~ age + factor(seas) + factor(multip) + factor(comp) + factor(comorb) + factor(ster) + factor(rur) + factor(phu) + factor(par) + factor(quint) + factor(care) + factor(smk) + factor(matai) +factor(itp)+factor(jia)+factor(t1d)+factor(ibd)+factor(celiac)+factor(vasc)+factor(sjo)+factor(glom),
+                   data = curve, 
+                   family = "binomial" (link="logit"))
+
+# calc adjusted survival curves and plot them
+
+adjsurv = adjustedsurv(data=curve, 
+                       variable = "exp_vax",
+                       ev_time = "futime",
+                       event = "out_ai",
+                       method = "iptw_cox",
+                       treatment_model=glm_mod,
+                       conf_int = T)
+
+plot(adjsurv)
+```
+
+
+
+## Cox PH
+```{r}
+# crude Cox PH model
+cox_model_crude <- coxph(Surv(futime, out_ai) ~ exp_vax, 
+                         data = data.vax.nm)
+# get HR estimates
+cox_fit_crude  <- cox_model_crude %>% 
+  broom::tidy(., conf.int = T, exponentiate = T)
+
+#summary 
+summary(cox_model_crude)
+
+# IPTW Cox PH model
+cox_model_iptw <- coxph(Surv(futime, out_ai) ~ exp_vax, 
+                        data = data.vax.nm, 
+                        weights = weight.res$weights)
+# get HR estimates
+cox_fit_iptw  <- cox_model_iptw %>% 
+  broom::tidy(., conf.int = T, exponentiate = T)
+
+#summary
+
+summary(cox_model_iptw)
+
+# Put HRs into a table. Top is crude, bottom is IPTW-adjusted
+cox_fit_crude %>% 
+  bind_rows(cox_fit_iptw)
+
+```
+
+# Try to make results table
+### needs outcome, number of events, IR and 95% CI per 1000 PY by exposure status, crude estimate, and adjusted estimate
+
+itp, jia, t1d, ibd, celiac, vasc, sjo, glom
+
+```{r}
+# get overall futime by exposure
+
+data.vax.nm %>%
+  select(futime, exp_vax) %>%
+  group_by(exp_vax) %>%
+  summarize(totalfu = sum(futime), totalfu.yr = (sum(futime))/365.25)
+
+# trying just one outcome
+ data.vax.nm %>%
+  select (exp_vax, futime, t1d) %>%
+  group_by(exp_vax) %>%
+  summarize(event = sum(t1d), total.fu.yrs = (sum(futime))/365.25) %>%
+  mutate(IR = (event/total.fu.yrs)*1000)
+ 
+ 
+# count number of each disease and sum of futime by exposure status
+outcomes = data.vax.nm %>%
+  select(exp_vax, futime, itp, jia, t1d, ibd, celiac, vasc, sjo, glom) %>%
+  group_by(exp_vax) %>%
+  summarize(across(everything(), ~ sum(.x))) %>% #only add the 1s of the diseases
+  mutate(futime.yrs = futime/365.25)
+ 
+ 
+# Get table in the correct format
+incidence.tbl = outcomes %>%
+  pivot_longer(!c(exp_vax, futime, futime.yrs), names_to = "ai_disease", values_to = "events") %>%
+  mutate(IR = (events/futime.yrs)*1000) %>%
+  pivot_wider(names_from = exp_vax, 
+              values_from=c(futime, futime.yrs, events, IR),
+              names_vary = "slowest")
+```
+
+
+

@@ -99,7 +99,7 @@ d2 = data %>%
 "par", "smk", "multip", "rur", "quint", "comp", "age", "seas", "bw", "gest", "sex", "del", "bf", "exp_vax"))
 
 table1(~ age + factor(seas) + factor(multip) + factor(comp) + factor(comorb) + factor(ster) + factor(rur) + factor(phu) + factor(par) + factor(quint) + factor(care) + factor(smk) + factor(matai) +factor(itp)+factor(jia)+factor(t1d)+factor(ibd)+factor(celiac)+factor(vasc)+factor(sjo)+factor(glom) | as.factor(exp_vax), 
-           data=data,
+           data=data.lab,
            overall = FALSE, 
            render.continuous = my.render.cont, 
            extra.col=list(`SMD`=SMD_value)) #SMD Column

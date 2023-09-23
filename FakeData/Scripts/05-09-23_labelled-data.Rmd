@@ -1,0 +1,311 @@
+---
+title: "PS and IPTW"
+author: "Sierra"
+date: "2023-09-05"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load libs
+```{r, message=FALSE, warning=FALSE}
+library(epiR)
+library(labelled)
+library(data.table)
+library(sjlabelled)
+library(ggeasy)
+library(reshape2)
+library(fastDummies)
+library(smd)
+library(lubridate)
+library(survminer)
+library(survival)
+library(adjustedCurves)
+library(jtools)
+library(cobalt)
+library(MatchIt)
+library(WeightIt)
+library(survey)
+library(janitor)
+library(tidyr)
+library(summarytools)
+library(haven)
+library(here)
+library(coxed)
+library(tableone)
+library(tidyverse)
+library(ggplot2)
+library(tidylog)
+library(flextable)
+library(gtsummary)
+```
+## Create date var
+```{r}
+today = Sys.Date()
+
+```
+
+
+## Load data
+```{r}
+#data_missing <- read_csv(here("Data", "brf-fakedata-missing_17AUG23.csv")) 
+
+data = read_csv(here("Data","ind-ai-no-missing_28AUG23.csv")) 
+
+key = read_csv(here("Data", "01-09-23_fakedata-label-key.csv"))
+
+# make vectors of continuous and categorical vars
+
+cat = c("id", "sex", "phu", "ster", "out_ai", "comorb", "matai", "care", 
+"par", "smk", "del", "multip", "rur", "quint", "exp_vax", "comp", 
+"exp_flu", "bf", "seas", "gest", "itp", "jia", "t1d", "ibd", "celiac", "vasc", "sjo", "glom")
+
+con = c("age", "futime","bw")
+
+bin = c("sex", "ster", "out_ai", "comorb", "matai", "del", "rur", "exp_vax", "comp", 
+"exp_flu", "itp", "jia", "t1d", "ibd", "celiac", "vasc", "sjo", "glom")
+
+covs = c("phu", "ster", "comorb", "matai","itp", "jia", "t1d", "ibd", "celiac", "vasc", "sjo", "glom", "care", "par", "smk", "multip", "rur", "quint", "comp", "age", "seas", "bw", "gest", "sex", "del", "bf")
+
+```
+
+## Labelling data with labelled package following this tutorial https://www.pipinghotdata.com/posts/2022-09-13-the-case-for-variable-labels-in-r/
+```{r}
+# make frame of just old names and new names
+meta = key %>%
+  select(old.name, new.name) %>%
+  filter(old.name != "preterm") # key cannot have variables that data does not have
+
+
+# create a named vector with deframe
+labels = meta %>%
+  deframe()
+
+# Assign labels using splice operator so that they are matched and order doesn't matter
+# "Splicing causes each name of the list to become an argument name."
+data.lab = data %>%
+  set_variable_labels(!!!labels)
+
+```
+
+
+# Create data dictionary automatically
+```{r}
+dict = data.lab %>%
+  generate_dictionary()
+```
+
+# gtsummary uses label names automatically
+```{r}
+t1 = data.lab %>%
+  #mutate(across(c(bin), as.logical)) %>%
+  select(age, par, smk, comorb, matai, comp, multip, quint, rur, gest, sex, exp_vax) %>%
+  tbl_summary(by=exp_vax,
+              type = all_dichotomous() ~ "categorical") %>%
+  add_overall() 
+
+# add level names to data
+
+show_header_names(t1)
+
+
+t1 = t1 %>%
+  modify_header(
+  label = '**Characteristic**',
+  stat_0 = '**Whole population** (unweighted) N = 229,753',
+  stat_1 = '**No**, N = 122,679',
+   stat_2 = '**Yes**, N = 107,074' ) %>%
+  modify_spanning_header(
+    c(stat_1, stat_2) ~ 
+      "**2009 A/H1N1 influenza vaccination during pregnancy (unweighted)**")
+
+t1
+
+# %>%  as_flex_table()
+
+"Distribution of baseline study population, overall and by 2009 A/H1N1 influenza vaccination status"
+```
+
+
+```{r}
+data.lab %>%
+  group_by( exp_vax) %>%
+  summarize_all(
+    N = n(), 
+    pct = 
+  )
+```
+
+
+```{r}
+# Stick together a bunch of tabyls?
+
+data.lab %>%
+  tabyl(par, exp_vax) %>%
+  adorn_percentages("col") %>%
+  adorn_pct_formatting(digits = 1) %>%
+  adorn_ns(position = "front")
+```
+
+# add to ggplot with ggeasy
+Mutate will remove labels, so we re-add them lower in the pipeline
+```{r}
+data.lab %>%
+  mutate(exp_vax = as.factor(exp_vax)) %>%
+  set_variable_labels(!!!labels) %>%
+  ggplot(aes( x=age, y=bw, color=exp_vax)) +
+  geom_point() +
+  easy_labs()
+```
+# make vars characters?
+```{r}
+d2.lab = data %>%
+  mutate(across(all_of(cat), as.character)) %>%
+  set_variable_labels(!!!labels)
+
+# make dictionary and see that levels are now present
+dict2 = d2.lab %>%
+  generate_dictionary()
+
+# try applying labels again
+val_labels(d2.lab$sex) = c(sex.lab)
+
+val_labels(d2.lab$sex,0)
+
+```
+
+
+
+## Another method using lists
+https://lefkiospaikousis.netlify.app/posts/2020-12-23-a-workflow-with-labelled-data/
+```{r}
+
+# Create a labelled list where names are var names and values are var labels
+lablist = var_label(data.lab)
+
+# Pass the var name from the list to make informative ggplot titles
+data %>%
+  ggplot(aes(x=phu)) +
+  geom_bar() +
+  labs(x=lablist[["phu"]])
+```
+## for value labels
+The format is (label = value): val_labels(v) <- c(yes = 1, no = 3, bug = 5) 
+1. split key into separate df for each variable
+2. make each df long so that old.val is a column and new.val is a column that correspond
+3. write a function that makes vectors from the dfs
+c("new.lvl" = "old.lvl", )
+
+```{r}
+# make key so that each value has its own row
+
+key2 = key %>%
+  separate_rows(old.lvl, new.lvl, sep=",") %>%
+  mutate(old.lvl = as.numeric(old.lvl)) %>%
+  filter(!is.na(old.lvl))
+
+# Create new var that combines old and new lvls
+tst = key2 %>%
+  mutate(term = paste0(dQuote(new.lvl), sep="=", old.lvl))
+
+# Combine into one row per variable and one vector each
+
+tst = tst %>%
+  select(-c(new.name, old.lvl, new.lvl)) %>%
+  aggregate(term ~ old.name, toString)
+
+
+# apply labels does not work. Maybe because you have to specify the levels at the same time?
+
+val_labels(data.lab$sex) = c(sex.lab)
+
+sex.lab = unlist(sex.lab)
+
+val_labels(data.lab$sex) 
+  
+  
+sex.lab = tst %>%
+  filter(old.name == "sex") %>%
+  select(term) 
+
+val_labels(data.lab$sex)
+
+levels = tst %>%
+  deframe()
+
+val_labels(data.lab$sex) = lvl$sex
+
+lvl$sex
+
+lvl = split(tst, f= tst$old.name)
+
+lvl = lapply(lvl, function(x) x[-1])
+
+sex.lab = 
+```
+
+
+```{r}
+key3 = key %>%
+  separate_rows(old.name)
+
+
+
+xy.list <- as.list(as.data.frame(t(key)))
+
+xy.list <- setNames(split(key, seq(nrow(key))), rownames(key))
+
+xy.list2 = lapply(xy.list,as.list)
+
+
+k3 = key %>%
+  filter(!is.na(old.lvl)) %>%
+  select(-c(new.name)) %>%
+  purrr::transpose()
+
+
+name.list = key %>%
+  filter(!is.na(old.lvl)) %>%
+  select(old.name)
+
+# split df by var name
+k4 = key %>%
+  filter(!is.na(old.lvl)) %>% # get rid of continuous
+  select(-c(new.name)) %>% # remove new name
+ split(k4$old.name) 
+
+
+names(k4)
+
+# remove first element of each list (old.name)
+k4 = lapply(k4, function(x) x[-1])
+
+# we can select the variable lists now
+k4$phu
+
+
+
+
+
+
+
+
+test = key %>%
+  filter(!is.na(old.lvl)) %>% # get rid of continuous
+  select(-c(new.name, new.lvl)) %>% # remove new name
+  pivot_wider(names_from = old.name,
+              values_from = old.lvl)
+
+
+row.names(key) = key$old.name
+
+
+
+
+
+
+
+```
+
